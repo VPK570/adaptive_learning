@@ -37,32 +37,36 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const initialCourse = searchParams.get("course") || "BAECE102";
   const [courseCode] = useState(initialCourse);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const key = `session_id_${initialCourse}`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      setSessionId(stored);
-    } else {
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const key = `session_id_${initialCourse}`;
+      const stored = localStorage.getItem(key);
+      if (stored) return stored;
       const newId = Math.random().toString(36).substring(7);
       localStorage.setItem(key, newId);
-      setSessionId(newId);
+      return newId;
     }
-  }, [initialCourse]);
+    return null;
+  });
+
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem(`session_id_${initialCourse}`, sessionId);
+    }
+  }, [sessionId, initialCourse]);
   
-  const initialWelcome: Message = {
-    role: "assistant",
+  const initialWelcome = useMemo(() => ({
+    role: "assistant" as const,
     content:
       `👋 Welcome to the **${initialCourse}** AI Tutor!\n\n` +
       "I'm your Socratic learning assistant. Ask me anything about the course materials — and I'll guide you through the concepts with questions and hints.\n\n" +
       "💡 *Tip: Be specific for better answers. Try asking about a particular concept, circuit type, or design method.*",
-  };
+  }), [initialCourse]);
   const [messages, setMessages] = useState<Message[]>([initialWelcome]);
   const [conversationHistory, setConversationHistory] = useState<HistoryItem[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -71,20 +75,19 @@ function ChatContent() {
   const fetchHistory = useCallback(async () => {
     try {
       const data = await apiFetch(`/chat-history?course_code=${courseCode}&session_id=${sessionId}`);
-      if (data && data.length > 0) {
-        const loadedMessages: Message[] = [initialWelcome, ...data.map((item: any) => ({ role: item.role, content: item.content }))];
+      if (data && Array.isArray(data)) {
+        const loadedMessages: Message[] = [initialWelcome, ...data.map((item: { role: "user" | "assistant", content: string }) => ({ role: item.role, content: item.content }))];
         setMessages(loadedMessages);
-        setConversationHistory(data.map((item: any) => ({ role: item.role, content: item.content })));
+        setConversationHistory(data.map((item: { role: "user" | "assistant", content: string }) => ({ role: item.role, content: item.content })));
       }
-    } catch {}
-  }, [courseCode, sessionId]);
+    } catch (err) {
+      console.error("Failed to fetch history", err);
+    }
+  }, [courseCode, sessionId, initialWelcome]);
 
   useEffect(() => {
     fetchHistory();
-    if (sessionId) {
-      localStorage.setItem(`session_id_${courseCode}`, sessionId);
-    }
-  }, [fetchHistory, sessionId, courseCode]);
+  }, [fetchHistory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -108,22 +111,6 @@ function ChatContent() {
       .slice(0, 5)
       .map((entry) => entry[0]);
   }, [messages]);
-
-  const fetchSuggestions = async (q: string) => {
-    try {
-      const data = await apiFetch(`/flashcards`, {
-        method: "POST",
-        body: JSON.stringify({
-          course_code: courseCode,
-          topic: q,
-          count: 3,
-        }),
-      });
-      setSuggestions(data.map((f: any) => f.question));
-    } catch (err) {
-      console.error("Failed to fetch suggestions", err);
-    }
-  };
 
   const handleSubmit = async (e?: React.FormEvent, question?: string) => {
     e?.preventDefault();

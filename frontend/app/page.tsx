@@ -25,36 +25,7 @@ export default function Dashboard() {
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(`${API_URL}/courses`);
-        if (res.ok) {
-          const data = await res.json();
-          setCourses(data);
-          
-          // Load enrolled status and last questions from localStorage
-          const enrolled: Record<string, boolean> = {};
-          const lasts: Record<string, string> = {};
-          data.forEach((course: Course) => {
-            enrolled[course.course_code] = localStorage.getItem(`enrolled_${course.course_code}`) === "true";
-            lasts[course.course_code] = localStorage.getItem(`last_question_${course.course_code}`) || "";
-            fetchProgress(course.course_code);
-          });
-          setEnrolledCourses(enrolled);
-          setLastQuestions(lasts);
-        }
-      } catch (error) {
-        console.error("Failed to fetch courses:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [API_URL]);
-
-  const fetchProgress = async (code: string) => {
+  const fetchProgress = useCallback(async (code: string) => {
     try {
       const res = await fetch(`${API_URL}/questions?course_code=${code}`);
       if (res.ok) {
@@ -83,7 +54,36 @@ export default function Dashboard() {
     } catch (error) {
       console.error(`Failed to fetch progress for ${code}:`, error);
     }
-  };
+  }, [API_URL]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`${API_URL}/courses`);
+        if (res.ok) {
+          const data = await res.json();
+          setCourses(data);
+          
+          // Load enrolled status and last questions from localStorage
+          const enrolled: Record<string, boolean> = {};
+          const lasts: Record<string, string> = {};
+          data.forEach((course: Course) => {
+            enrolled[course.course_code] = localStorage.getItem(`enrolled_${course.course_code}`) === "true";
+            lasts[course.course_code] = localStorage.getItem(`last_question_${course.course_code}`) || "";
+            fetchProgress(course.course_code);
+          });
+          setEnrolledCourses(enrolled);
+          setLastQuestions(lasts);
+        }
+      } catch (error) {
+        console.error("Failed to fetch courses:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [API_URL, fetchProgress]);
 
   const toggleEnroll = (e: React.MouseEvent, code: string) => {
     e.stopPropagation();

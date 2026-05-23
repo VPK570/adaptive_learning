@@ -1,0 +1,44 @@
+{
+  "sgvys": [
+    {
+      "role": "user",
+      "content": "comuputationl chemisty?",
+      "timestamp": "2026-05-23T07:51:39.530386"
+    },
+    {
+      "role": "assistant",
+      "content": "This topic is not covered in your course materials.",
+      "timestamp": "2026-05-23T07:51:39.531250"
+    },
+    {
+      "role": "user",
+      "content": "wat is in my course",
+      "timestamp": "2026-05-23T07:52:06.467281"
+    },
+    {
+      "role": "assistant",
+      "content": "This topic is not covered in your course materials.",
+      "timestamp": "2026-05-23T07:52:06.467678"
+    },
+    {
+      "role": "user",
+      "content": "what is cv?",
+      "timestamp": "2026-05-23T07:52:51.420379"
+    },
+    {
+      "role": "assistant",
+      "content": "This topic is not covered in your course materials.",
+      "timestamp": "2026-05-23T07:52:51.420644"
+    },
+    {
+      "role": "user",
+      "content": "what is computational chemistry",
+      "timestamp": "2026-05-23T08:32:17.516934"
+    },
+    {
+      "role": "assistant",
+      "content": "Computational chemistry is theuse of mathematical models and computer simulations to study the structures, properties, and reactions of chemical systems.\u202f[Source: Latest Module\u202f5 Lecture PPT.pptx, Slide\u202f1]",
+      "timestamp": "2026-05-23T08:32:17.517932"
+    }
+  ]
+}
