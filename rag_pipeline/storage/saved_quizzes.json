@@ -1,0 +1,77 @@
+[
+  {
+    "id": "22fe6717-9583-45e4-93a6-ad5e258fc0e5",
+    "course_code": "BACHY106",
+    "topic": "all topics",
+    "questions": [
+      {
+        "question": "Which of the following best defines computational chemistry?",
+        "options": [
+          "Use of experimental techniques to study chemical reactions",
+          "Application of mathematical models and computer simulations to study chemical systems",
+          "Study of macroscopic physical properties of bulk materials",
+          "Development of laboratory glassware for chemical analysis"
+        ],
+        "correct_index": 1,
+        "explanation": "Computational chemistry uses mathematical models and computer simulations to study chemical systems.",
+        "user_answer_index": 0,
+        "is_correct": false
+      },
+      {
+        "question": "Which post\u2011Hartree\u2011Fock method is widely regarded as providing high\u2011accuracy results for molecular energies?",
+        "options": [
+          "Hartree\u2011Fock (HF)",
+          "Density Functional Theory (DFT)",
+          "Configuration Interaction (CI)",
+          "Coupled Cluster (CC)"
+        ],
+        "correct_index": 3,
+        "explanation": "Coupled Cluster, especially CCSD(T), includes electron correlation and is considered highly accurate for molecular energies.",
+        "user_answer_index": 1,
+        "is_correct": false
+      },
+      {
+        "question": "In quantum chemistry, a basis set is best described as:",
+        "options": [
+          "A set of molecular orbitals used to describe electron density",
+          "A collection of experimental spectral data",
+          "A set of mathematical functions used to construct molecular orbitals",
+          "A list of atomic nuclei positions"
+        ],
+        "correct_index": 2,
+        "explanation": "Basis sets consist of basis functions (e.g., Gaussian functions) that span the space of atomic orbitals to build molecular orbitals.",
+        "user_answer_index": 2,
+        "is_correct": true
+      },
+      {
+        "question": "In a typical fuel cell, which electrode serves as the oxidizing electrode?",
+        "options": [
+          "Anode",
+          "Cathode",
+          "Electrolyte",
+          "Catalyst"
+        ],
+        "correct_index": 1,
+        "explanation": "The cathode is the electrode where reduction (electron gain) occurs, acting as the oxidizing electrode.",
+        "user_answer_index": 0,
+        "is_correct": false
+      },
+      {
+        "question": "Which of the following application areas is NOT typically addressed by computational chemistry?",
+        "options": [
+          "Drug design and pharmaceutical research",
+          "Materials science and semiconductor design",
+          "Meteorological weather forecasting",
+          "Reaction mechanism studies"
+        ],
+        "correct_index": 2,
+        "explanation": "Meteorological weather forecasting primarily relies on atmospheric dynamics models rather than computational chemistry methods.",
+        "user_answer_index": 0,
+        "is_correct": false
+      }
+    ],
+    "score": 1.0,
+    "total": 5,
+    "created_at": "2026-05-23T11:01:30.694969"
+  }
+]

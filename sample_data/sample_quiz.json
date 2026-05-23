@@ -1,0 +1,12 @@
+{
+  "course_code": "BAECE102",
+  "topic": "Flip-flops",
+  "questions": [
+    {
+      "question": "What is a flip-flop?",
+      "options": ["Memory element", "Logic gate", "Counter", "Encoder"],
+      "correct_index": 0,
+      "explanation": "Flip-flops are fundamental building blocks of digital memory."
+    }
+  ]
+}

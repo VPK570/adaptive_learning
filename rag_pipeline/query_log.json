@@ -1,0 +1,134 @@
+[
+  {
+    "question": "What is a flip-flop and how does it work?",
+    "course_code": "BAECE102",
+    "timestamp": "2026-05-22T17:53:15.138791",
+    "response_preview": "Based on the provided course materials, here is the explanation of a flip-flop and its operation:\n\n*"
+  },
+  {
+    "question": "What are the methods and basis sets commonly used",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-22T18:53:54.873668",
+    "response_preview": "I'm sorry, I couldn't generate a response. Please try again.",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "what is hf method",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-22T19:06:01.991490",
+    "response_preview": "The HF method, also called theHartree\u2011Fock method, is a fundamental **ab\u2011initio** quantum\u2011chemical approach that approximates the electronic wavefunction of a many\u2011electron system by a single Slater d",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "hi i want to knwo what is cv",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T09:05:24.456056",
+    "response_preview": "**Cyclic Voltammetry (CV)** is a voltammetric technique in which the potential of a working electrode is swept linearly in one direction (e.g., from negative to positive) and then reversed back to the",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "who is virath koli",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T09:06:25.554919",
+    "response_preview": "\n[Note: 1 claim(s) above could not be verified against course materials.]",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "okay on what i asked y b4 where is that is used and what are the advantages",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T09:07:27.593262",
+    "response_preview": "**Where fuel\u2011cell technology is used**\n\n- Fuel cells are employed in **space vehicles, submarines and other military equipment**, where the water produced can be used as a fresh\u2011water source for astro",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "hi",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T09:08:18.059768",
+    "response_preview": "Hello! How can I assist you today? [Source: Latest Module 5 Lecture PPT.pptx, Slide 1]",
+    "out_of_scope": false,
+    "cited_sources": [
+      {
+        "source_title": "Latest Module 5 Lecture PPT.pptx",
+        "page": 12,
+        "content_type": "image",
+        "has_image": false
+      }
+    ]
+  },
+  {
+    "question": "Explain the excitation table of a JK flip-flop",
+    "course_code": "BAECE102",
+    "timestamp": "2026-05-23T09:13:53.390487",
+    "response_preview": "I'm sorry, I couldn't generate a response. Please try again.",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "whta is my last question abt",
+    "course_code": "BAECE102",
+    "timestamp": "2026-05-23T09:16:46.114391",
+    "response_preview": "[Source: N/A]\n[Note: 1 claim(s) above could not be verified against course materials.]",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "did i talk abt jk b4",
+    "course_code": "BAECE102",
+    "timestamp": "2026-05-23T09:17:15.319762",
+    "response_preview": "Yes \u2013 earlier inthe course we covered JK flip\u2011flops.  \nIn **Slide\u202f9** of *Design of Synchronous Asynchronous Counters* you saw the JK\u2011flip\u2011flop symbol and its connection to the combinational logic tha",
+    "out_of_scope": false,
+    "cited_sources": [
+      {
+        "source_title": "WINSEM2025 26 VL BAECE102 00100 ETH 2026 03 01 MOD 4 Design of Synchronous Asynch Counters",
+        "page": 9,
+        "content_type": "text",
+        "has_image": false
+      }
+    ]
+  },
+  {
+    "question": "what is quantum",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T10:05:10.373128",
+    "response_preview": "This topic is not in your course curriculum.",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "what is computatinal chemisrty",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T10:06:22.358725",
+    "response_preview": "This topic is not in your course curriculum.",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "what is computatinal chemisrty",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T10:19:02.342383",
+    "response_preview": "Computational chemistryis the use of mathematical models and computer simulations to study the structures, properties, and reactions of chemical systems.\u202f[Source: Latest Module\u202f5 Lecture PPT.pptx, Sli",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "what is computatinal chemisrty",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T10:19:25.732885",
+    "response_preview": "Computational chemistry is the use of mathematical models and computer simulations to study the structures, properties, and reactions of chemical systems.\u202f[Source: Latest Module\u202f5 Lecture PPT.pptx, Sl",
+    "out_of_scope": false,
+    "cited_sources": []
+  },
+  {
+    "question": "what is wquantum computing",
+    "course_code": "BACHY106",
+    "timestamp": "2026-05-23T10:19:55.429187",
+    "response_preview": "\n[Note: 1 claim(s) above could not be verified against course materials.]",
+    "out_of_scope": false,
+    "cited_sources": []
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dd5a7801-3d22-45f0-8848-60b6bebf11e2",
+    "course_code": "BACHY106",
+    "topic": "ALL TOPICS",
+    "cards": [
+      {
+        "question": "What is computational chemistry?",
+        "answer": "The use of mathematical models and computer simulations to study the structures, properties, and reactions of chemical systems."
+      },
+      {
+        "question": "Name three major application areas of computational chemistry.",
+        "answer": "Molecular structure determination, energy calculations, and reaction mechanism studies."
+      },
+      {
+        "question": "What is a potential energy surface (PES) and how many dimensions does it have for a non\u2011linear molecule with N atoms?",
+        "answer": "A PES is a multidimensional surface representing the potential energy of a molecular system as a function of nuclear coordinates; for a non\u2011linear molecule it has 3N\u20116 dimensions."
+      },
+      {
+        "question": "What is the purpose of geometry optimization?",
+        "answer": "To adjust atomic positions to find the molecular geometry that minimizes the potential energy on the PES."
+      },
+      {
+        "question": "Define electrostatic potential and its significance in chemistry.",
+        "answer": "The electrostatic potential is the work needed to bring a unit positive charge to a point in a molecule's field; it reveals charge distribution, predicts reactive sites, and aids in understanding non\u2011covalent interactions."
+      },
+      {
+        "question": "Which quantum chemical method is regarded as the most accurate for high\u2011precision energy calculations?",
+        "answer": "Coupled Cluster theory, especially CCSD(T), is considered the gold standard for high\u2011precision molecular energies."
+      },
+      {
+        "question": "What is a basis set and why do we use different types?",
+        "answer": "A basis set is a set of mathematical functions used to represent atomic orbitals; different types vary in size and flexibility to balance computational cost and accuracy."
+      },
+      {
+        "question": "What is the difference between Hartree\u2011Fock (HF) and Density Functional Theory (DFT)?",
+        "answer": "HF solves the many\u2011electron Schr\u00f6dinger equation with a single Slater determinant and neglects electron correlation, while DFT uses electron density and includes correlation through exchange\u2011correlation functionals."
+      },
+      {
+        "question": "What are the steps involved in an excited\u2011state calculation?",
+        "answer": "Select a method (e.g., TD\u2011DFT, CIS, CC2), define the excited electronic state, compute the electronic structure, and obtain excitation energies and related properties."
+      },
+      {
+        "question": "How do AI/ML complement traditional computational chemistry methods?",
+        "answer": "AI/ML provide fast, data\u2011driven predictions of molecular properties and reaction pathways, accelerating simulations while traditional methods deliver high accuracy but at higher computational cost."
+      }
+    ],
+    "created_at": "2026-05-23T10:26:06.952941"
+  }
+]
