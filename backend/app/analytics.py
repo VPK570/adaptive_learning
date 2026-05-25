@@ -2,10 +2,16 @@ import json
 import os
 from collections import Counter
 from datetime import datetime
+from app.validation import validate_course_code, sanitize_text, MAX_QUESTION_LENGTH
+from app.curriculum import CurriculumManager
 
 LOG_FILE = "query_log.json"
+curriculum = CurriculumManager()
 
 def log_query(question: str, course_code: str, response: str, cited_sources: list = None):
+    course_code = validate_course_code(course_code)
+    question = sanitize_text(question, MAX_QUESTION_LENGTH)
+    
     refusal_phrase = "I don't have enough information in the course materials"
     out_of_scope = refusal_phrase in response
     
@@ -32,6 +38,7 @@ def log_query(question: str, course_code: str, response: str, cited_sources: lis
         json.dump(logs, f, indent=2)
 
 def get_unanswered_questions(course_code: str):
+    course_code = validate_course_code(course_code)
     if not os.path.exists(LOG_FILE):
         return []
     try:
@@ -43,6 +50,7 @@ def get_unanswered_questions(course_code: str):
     return [log for log in logs if log.get("course_code") == course_code and log.get("out_of_scope", False)]
 
 def get_coverage(course_code: str):
+    course_code = validate_course_code(course_code)
     if not os.path.exists(LOG_FILE):
         return {}
     try:
@@ -55,10 +63,6 @@ def get_coverage(course_code: str):
     
     doc_hits = {}
     for log in course_logs:
-        # Check source_title in cited_sources
-        # We need to be careful how cited_sources is structured. 
-        # If it's a list of strings (source titles) or list of dicts.
-        # Assuming list of dicts with 'source_title' key based on QueryEngine.query
         for src in log.get("cited_sources", []):
             if isinstance(src, dict):
                 title = src.get("source_title")
@@ -70,13 +74,8 @@ def get_coverage(course_code: str):
                 
     return doc_hits
 
-from app.curriculum import CurriculumManager
-
-curriculum = CurriculumManager()
-
-...
-
 def get_analytics(course_code: str):
+    course_code = validate_course_code(course_code)
     if not os.path.exists(LOG_FILE):
         return {"top_questions": [], "questions_per_day": {}, "weak_topics": [], "suggested_revision": [], "recent_questions": []}
         
@@ -91,22 +90,18 @@ def get_analytics(course_code: str):
     
     topic_hits = {}
     for topic in curriculum_topics:
-        # Count hits in question text
         hits = sum(1 for log in course_logs if topic.lower() in log["question"].lower())
         topic_hits[topic] = hits
     
     weak_topics = [t for t, h in topic_hits.items() if 0 < h < 2]
     suggested_revision = [t for t, h in topic_hits.items() if h == 0]
     
-    # Top 10 questions
     questions = [log["question"] for log in course_logs]
     top_questions = Counter(questions).most_common(10)
     
-    # Questions per day
     dates = [log["timestamp"].split("T")[0] for log in course_logs]
     questions_per_day = dict(Counter(dates))
     
-    # Recent questions (last 10)
     recent_questions = sorted(course_logs, key=lambda x: x["timestamp"], reverse=True)[:10]
     
     return {
@@ -118,6 +113,7 @@ def get_analytics(course_code: str):
     }
 
 def get_all_questions(course_code: str):
+    course_code = validate_course_code(course_code)
     if not os.path.exists(LOG_FILE):
         return []
         

@@ -1,8 +1,9 @@
 import uuid
 from typing import Any
-from app.config import settings
 from app.db import get_collection
 from app.rag import RAGPipeline
+
+from app.validation import validate_course_code
 
 class CurriculumManager:
     def __init__(self):
@@ -11,6 +12,7 @@ class CurriculumManager:
         self.rag = RAGPipeline()
 
     def _get_curriculum_collection(self, course_code: str):
+        course_code = validate_course_code(course_code)
         return get_collection(f"curriculum_{course_code}")
 
     async def ingest_curriculum(
@@ -19,6 +21,7 @@ class CurriculumManager:
         document_title: str,
         filepath: str,
     ) -> dict[str, Any]:
+        course_code = validate_course_code(course_code)
         from app.pdf_extractor import extract_all_pages
         from app.openrouter import client
         
@@ -86,6 +89,7 @@ class CurriculumManager:
             return []
 
     async def check_topic_in_curriculum(self, course_code: str, query: str) -> bool:
+        course_code = validate_course_code(course_code)
         """
         Checks if the query is relevant to the course curriculum or notes.
         Uses semantic similarity against both.
