@@ -302,6 +302,7 @@ async def query(body: QueryRequest):
 
     if not chunks:
         raise HTTPException(404, "No chunks found. Ingest documents first.")
+    history = get_course_history(body.course_code, body.session_id)
 
     result = await engine.query(
         query=body.question,
@@ -310,6 +311,7 @@ async def query(body: QueryRequest):
         chunks=chunks,
         language=body.language,
         mastery=body.mastery,
+        history=history
     )
 
     # Log the query for analytics
