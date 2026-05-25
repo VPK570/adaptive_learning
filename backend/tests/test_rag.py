@@ -60,10 +60,16 @@ class TestCitation:
 
     def test_validate_citations_valid(self):
         text = "Hash functions [Source: Data Structures Week 3, Slide 8] work."
-        chunks = [{"source_title": "Data Structures Week 3"}]
+        chunks = [{"source_title": "Data Structures Week 3", "page": 8}]
         result = validate_citations(text, chunks)
         assert result["valid"] is True
         assert result["coverage"] >= 0.8
+
+    def test_validate_citations_hallucinated_slide(self):
+        text = "Water boils at 100 degrees [Source: Chemistry, Slide 99]."
+        chunks = [{"source_title": "Chemistry", "page": 5}]
+        result = validate_citations(text, chunks)
+        assert result["valid"] is False
 
     def test_validate_citations_no_citations(self):
         result = validate_citations("Some claim", [])

@@ -6,7 +6,7 @@ Handles both text and image chunks in the context window.
 import re
 
 from app.openrouter import client
-from app.citation import validate_citations, remove_uncited_claims, extract_all_citations
+from app.citation import validate_citations, remove_uncited_claims, extract_all_citations, parse_citation
 from app.curriculum import CurriculumManager
 
 curriculum = CurriculumManager()
@@ -20,9 +20,9 @@ def build_tutor_system_prompt(
     mastery_section = ""
     if mastery is not None:
         if mastery >= 0.70:
-            mastery_section = "Student has strong mastery. Use deeper Socratic questions that require synthesis and evaluation."
+            mastery_section = "Student has strong mastery. Use deeper questions that require synthesis and evaluation."
         elif mastery >= 0.50:
-            mastery_section = "Student has moderate mastery. Use scaffolded Socratic questions with examples."
+            mastery_section = "Student has moderate mastery. Use scaffolded questions with examples."
         elif mastery >= 0.30:
             mastery_section = "Student is struggling. Use simpler diagnostic questions, break concepts into smaller parts."
         else:
@@ -39,7 +39,9 @@ RULES:
 - If the answer cannot be found in the provided context chunks, respond with:
   "This topic is not covered in your course materials."
 - Never answer from general knowledge.
-- Every factual claim MUST include an inline citation: [Source: title, Slide N]
+- Every factual claim MUST include an inline citation.
+- ONLY use citations from the "VALID CITATIONS LIST" provided in the context.
+- Format: [Source: title, Slide N] or [Source: title, Page N]
 - If an image is relevant, describe what you see in it: "As shown in the diagram [Source: title, Slide N]..."
 - Respond in {language}.
 
@@ -58,6 +60,8 @@ def build_context_window(
 
     text_chunks = [c for c in chunks if c.get("content_type", "text") != "image"]
     image_chunks = [c for c in chunks if c.get("content_type") == "image" or c.get("has_image")]
+    
+    available_citations = []
 
     for i, c in enumerate(text_chunks, 1):
         title = c.get("source_title", "Unknown")
@@ -71,6 +75,7 @@ def build_context_window(
             else f"<Document {i}: {title}, Slide {page}>"
         )
         parts.append(f"{header}\n{text}\n</{content_type.title()} {i}>")
+        available_citations.append(f"[Source: {title}, Slide {page}]")
 
     if image_chunks:
         parts.append("\nRELEVANT IMAGES FROM COURSE MATERIALS:")
@@ -83,6 +88,12 @@ def build_context_window(
                 f"{text}\n"
                 f"</Image {i}>"
             )
+            available_citations.append(f"[Source: {title}, Slide {page}]")
+
+    if available_citations:
+        parts.append("\nVALID CITATIONS LIST (ONLY use these exact labels):")
+        for cite in sorted(list(set(available_citations))):
+            parts.append(f"- {cite}")
 
     if history:
         parts.append("\nCONVERSATION HISTORY:")
@@ -130,7 +141,8 @@ class QueryEngine:
         2. Build prompt with system + context (text + images) + history
         3. Call LLM via OpenRouter
         4. Validate citations
-        5. Return response + metadata
+        5. If validation fails, retry once with correction prompt
+        6. Return response + metadata
         """
         if not await curriculum.check_topic_in_curriculum(course_code, query):
              return {
@@ -164,30 +176,59 @@ class QueryEngine:
                 "citation_check": {"valid": False, "reason": "Empty response from LLM"},
             }
 
+        citation_check = validate_citations(response_text, chunks)
+        
+        # SELF-CORRECTION RETRY: If validation fails, try one more time with a stricter prompt
+        if not citation_check["valid"]:
+            retry_messages = messages + [
+                {"role": "assistant", "content": response_text},
+                {"role": "user", "content": (
+                    "Your previous response had missing or invalid citations. "
+                    "Please rewrite your answer. Every factual claim MUST be followed by "
+                    "a valid citation from the provided list. If you cannot verify a claim "
+                    "from the materials, DO NOT make it. Use ONLY these citations:\n" +
+                    "\n".join(set(citation_check.get("citations", [])))
+                )}
+            ]
+            response_text = await client.chat(retry_messages, temperature=0.1, max_tokens=1024)
+            citation_check = validate_citations(response_text, chunks)
+
+        # Final cleanup if still failing (harder gate)
+        if not citation_check["valid"]:
+            response_text = remove_uncited_claims(response_text)
+            # If after removal we have very little text left, or coverage is still 0, refuse
+            if len(response_text) < 50:
+                response_text = "I'm sorry, but I cannot verify the answer to your question using the provided course materials."
+            else:
+                citation_check["valid"] = True
+                citation_check["note"] = "Unverified claims were removed to ensure accuracy."
+
         citations = extract_all_citations(response_text)
         
         # Determine which chunks were actually cited
         actually_cited = []
-        seen_titles = set()
+        seen_keys = set()
         for cit in citations:
-            cit_lower = cit.lower()
+            c_title, c_page = parse_citation(cit)
+            if not c_title or not c_page:
+                continue
+            
             for c in chunks:
-                title = c.get("source_title", "").lower()
-                if title and title in cit_lower:
-                    if title not in seen_titles:
-                        actually_cited.append({
-                            "source_title": c.get("source_title", ""),
-                            "page": c.get("page", ""),
-                            "content_type": c.get("content_type", "text"),
-                            "has_image": c.get("has_image", False),
-                        })
-                        seen_titles.add(title)
+                v_title = c.get("source_title", "").lower()
+                v_page = str(c.get("page", ""))
+                
+                key = (v_title, v_page)
+                if key in seen_keys:
+                    continue
 
-        citation_check = validate_citations(response_text, chunks)
-        if not citation_check["valid"]:
-            response_text = remove_uncited_claims(response_text)
-            citation_check["valid"] = True
-            citation_check["note"] = "Some uncited claims were removed"
+                if v_page == c_page and (v_title in c_title or c_title in v_title):
+                    actually_cited.append({
+                        "source_title": c.get("source_title", ""),
+                        "page": c.get("page", ""),
+                        "content_type": c.get("content_type", "text"),
+                        "has_image": c.get("has_image", False),
+                    })
+                    seen_keys.add(key)
 
         text_chunks = [c for c in chunks if c.get("content_type", "text") != "image"]
         image_chunks = [c for c in chunks if c.get("content_type") == "image" or c.get("has_image")]

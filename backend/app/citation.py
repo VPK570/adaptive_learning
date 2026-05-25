@@ -5,6 +5,21 @@ import re
 CITATION_RE = re.compile(r"\[Source:\s*[^\]]+\]", re.IGNORECASE)
 
 
+def parse_citation(citation_text: str) -> tuple[str, str] | tuple[None, None]:
+    """Extract title and page/slide number from a citation string."""
+    # Matches: [Source: Title, Slide 5] or [Source: Title, Page 5]
+    match = re.search(r"\[Source:\s*(.*?),\s*(?:Slide|Page|Unit)?\s*(\d+)\]", citation_text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower(), match.group(2).strip()
+    
+    # Fallback: [Source: Title, 5]
+    match = re.search(r"\[Source:\s*(.*?),\s*(\d+)\]", citation_text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip().lower(), match.group(2).strip()
+        
+    return None, None
+
+
 def has_citation(text: str) -> bool:
     return bool(CITATION_RE.search(text))
 
@@ -43,17 +58,39 @@ def validate_citations(response: str, chunks: list[dict]) -> dict:
     if not cited:
         return {"valid": False, "reason": "No citations found", "coverage": 0.0}
 
-    titles = {c.get("source_title", "").lower() for c in chunks}
+    # Create a lookup set of (title, page) for fast matching
+    valid_sources = set()
+    for c in chunks:
+        title = c.get("source_title", "").lower()
+        page = str(c.get("page", ""))
+        valid_sources.add((title, page))
+
     valid = 0
+    detailed_results = []
     for cit in cited:
-        cit_lower = cit.lower()
-        if any(t in cit_lower or any(w in cit_lower for w in t.split() if len(w) > 4) for t in titles):
+        title, page = parse_citation(cit)
+        is_valid = False
+        if title and page:
+            # Direct match
+            if (title, page) in valid_sources:
+                is_valid = True
+            else:
+                # Loose title match if direct match fails
+                for v_title, v_page in valid_sources:
+                    if (v_title in title or title in v_title) and v_page == page:
+                        is_valid = True
+                        break
+        
+        if is_valid:
             valid += 1
+        
+        detailed_results.append({"citation": cit, "parsed": (title, page), "valid": is_valid})
 
     return {
-        "valid": (valid / len(cited)) >= 0.8,
+        "valid": (valid / len(cited)) >= 0.8 if cited else False,
         "total_citations": len(cited),
         "valid_citations": valid,
-        "coverage": round(valid / len(cited), 2),
+        "coverage": round(valid / len(cited), 2) if cited else 0.0,
         "citations": cited,
+        "details": detailed_results
     }
