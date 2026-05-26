@@ -32,7 +32,7 @@ def extract_all_citations(text: str) -> list[str]:
 
 def remove_uncited_claims(text: str) -> str:
     """Remove or flag claims that lack a citation."""
-    sentences = text.split(". ")
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
     kept = []
     dropped = 0
 
