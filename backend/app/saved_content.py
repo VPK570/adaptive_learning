@@ -3,6 +3,7 @@ import os
 import uuid
 from datetime import datetime
 from app.config import settings
+from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
 
 class SavedContentManager:
     def __init__(self):
@@ -29,6 +30,8 @@ class SavedContentManager:
             json.dump(data, f, indent=2)
 
     def save_flashcards(self, course_code, topic, cards):
+        course_code = validate_course_code(course_code)
+        topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
         data = self._read_json(self.flashcards_file)
         new_set = {
             "id": str(uuid.uuid4()),
@@ -42,6 +45,7 @@ class SavedContentManager:
         return new_set
 
     def get_saved_flashcards(self, course_code):
+        course_code = validate_course_code(course_code)
         data = self._read_json(self.flashcards_file)
         return [c for c in data if c["course_code"] == course_code]
 
@@ -54,6 +58,8 @@ class SavedContentManager:
         return True
 
     def save_quiz(self, course_code, topic, questions, score):
+        course_code = validate_course_code(course_code)
+        topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
         data = self._read_json(self.quizzes_file)
         new_quiz = {
             "id": str(uuid.uuid4()),
@@ -69,6 +75,7 @@ class SavedContentManager:
         return new_quiz
 
     def get_saved_quizzes(self, course_code):
+        course_code = validate_course_code(course_code)
         data = self._read_json(self.quizzes_file)
         return [q for q in data if q["course_code"] == course_code]
 
