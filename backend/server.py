@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, List
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Query, UploadFile, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -33,7 +33,8 @@ from app.validation import (
     MAX_QUESTION_LENGTH,
     MAX_COURSE_NAME_LENGTH,
     MAX_DESCRIPTION_LENGTH,
-    MAX_LANGUAGE_LENGTH
+    MAX_LANGUAGE_LENGTH,
+    MAX_FILE_SIZE
 )
 
 # ─── Lifespan ───────────────────────────────────────────────────────────────────
@@ -56,6 +57,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    if request.method in ["POST", "PUT"]:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_FILE_SIZE:
+            return Response(content="File size exceeds limit", status_code=413)
+    return await call_next(request)
 
 rag = RAGPipeline()
 engine = QueryEngine()
@@ -172,8 +181,8 @@ async def upload_curriculum(
     temp_path = f"/tmp/curriculum_{uuid.uuid4().hex}.pdf"
     try:
         content = await file.read()
-        if len(content) > 20 * 1024 * 1024: # 20MB limit
-            raise HTTPException(400, "File size exceeds limit (20MB)")
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(413, "File size exceeds limit (15MB)")
 
         with open(temp_path, "wb") as f:
             f.write(content)
@@ -305,8 +314,8 @@ async def ingest_pdf(
     temp_path = f"/tmp/ingest_{uuid.uuid4().hex}.pdf"
     try:
         content = await file.read()
-        if len(content) > 50 * 1024 * 1024: # 50MB limit for general docs
-            raise HTTPException(400, "File size exceeds limit (50MB)")
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(413, "File size exceeds limit (15MB)")
 
         with open(temp_path, "wb") as f:
             f.write(content)
