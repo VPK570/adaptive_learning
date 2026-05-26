@@ -13,8 +13,11 @@ Images are embedded natively using Nemotron VL — no captioning needed.
 
 import io
 import base64
+import logging
 from dataclasses import dataclass
 from typing import Generator
+
+logger = logging.getLogger(__name__)
 
 import pypdf
 
@@ -92,10 +95,10 @@ async def extract_all_pages(filepath: str) -> list[PageContent]:
                                         valid=True,
                                         bytes_size=len(data),
                                     ))
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+                        except Exception as e:
+                            logger.warning(f"Failed to extract image {key} on page {i}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to process resources on page {i}: {e}")
 
         pages.append(PageContent(page_num=i, text=text, images=images))
 
@@ -130,10 +133,10 @@ async def extract_all_pages_from_bytes(pdf_bytes: bytes) -> list[PageContent]:
                                         valid=True,
                                         bytes_size=len(data),
                                     ))
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+                        except Exception as e:
+                            logger.warning(f"Failed to extract image {key} on page {i}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to process resources on page {i}: {e}")
 
         pages.append(PageContent(page_num=i, text=text, images=images))
 
