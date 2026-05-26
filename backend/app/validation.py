@@ -9,6 +9,7 @@ MAX_QUESTION_LENGTH = 1000
 MAX_COURSE_NAME_LENGTH = 100
 MAX_DESCRIPTION_LENGTH = 500
 MAX_LANGUAGE_LENGTH = 20
+MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB limit
 
 # --- Regex Patterns ---
 # Only allow alphanumeric, underscores, and hyphens for IDs and codes
