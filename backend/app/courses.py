@@ -2,6 +2,12 @@ import json
 import os
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from app.validation import (
+    validate_course_code, 
+    sanitize_text, 
+    MAX_COURSE_NAME_LENGTH, 
+    MAX_DESCRIPTION_LENGTH
+)
 
 COURSES_FILE = "courses.json"
 
@@ -19,6 +25,11 @@ def save_courses_data(courses: List[Dict[str, Any]]):
         json.dump(courses, f, indent=2)
 
 def create_course(course_code: str, course_name: str, description: str, icon: str = "📚") -> Dict[str, Any]:
+    course_code = validate_course_code(course_code)
+    course_name = sanitize_text(course_name, MAX_COURSE_NAME_LENGTH)
+    description = sanitize_text(description, MAX_DESCRIPTION_LENGTH)
+    icon = sanitize_text(icon, 10)
+    
     courses = get_all_courses_data()
     
     # Check if course already exists
@@ -39,6 +50,7 @@ def create_course(course_code: str, course_name: str, description: str, icon: st
     return new_course
 
 def update_course(course_code: str, course_name: Optional[str] = None, description: Optional[str] = None, icon: Optional[str] = None) -> Dict[str, Any]:
+    course_code = validate_course_code(course_code)
     courses = get_all_courses_data()
     updated = False
     updated_course = None
@@ -46,11 +58,11 @@ def update_course(course_code: str, course_name: Optional[str] = None, descripti
     for course in courses:
         if course["course_code"] == course_code:
             if course_name is not None:
-                course["course_name"] = course_name
+                course["course_name"] = sanitize_text(course_name, MAX_COURSE_NAME_LENGTH)
             if description is not None:
-                course["description"] = description
+                course["description"] = sanitize_text(description, MAX_DESCRIPTION_LENGTH)
             if icon is not None:
-                course["icon"] = icon
+                course["icon"] = sanitize_text(icon, 10)
             updated = True
             updated_course = course
             break
@@ -62,6 +74,7 @@ def update_course(course_code: str, course_name: Optional[str] = None, descripti
     return updated_course
 
 def delete_course(course_code: str):
+    course_code = validate_course_code(course_code)
     courses = get_all_courses_data()
     initial_len = len(courses)
     courses = [c for c in courses if c["course_code"] != course_code]

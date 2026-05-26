@@ -74,7 +74,7 @@ def build_context_window(
             if content_type == "text"
             else f"<Document {i}: {title}, Slide {page}>"
         )
-        parts.append(f"{header}\n{text}\n</{content_type.title()} {i}>")
+        parts.append(f"{header}\n{text}\n</Text {i}>")
         available_citations.append(f"[Source: {title}, Slide {page}]")
 
     if image_chunks:
@@ -180,6 +180,10 @@ class QueryEngine:
         
         # SELF-CORRECTION RETRY: If validation fails, try one more time with a stricter prompt
         if not citation_check["valid"]:
+            # Build the authoritative list of valid citations from the actual chunks
+            valid_citations_list = {f"[Source: {c.get('source_title', 'Unknown')}, Slide {c.get('page', '?')}]" for c in chunks}
+            valid_citations_str = "\n".join(sorted(list(valid_citations_list)))
+
             retry_messages = messages + [
                 {"role": "assistant", "content": response_text},
                 {"role": "user", "content": (
@@ -187,7 +191,7 @@ class QueryEngine:
                     "Please rewrite your answer. Every factual claim MUST be followed by "
                     "a valid citation from the provided list. If you cannot verify a claim "
                     "from the materials, DO NOT make it. Use ONLY these citations:\n" +
-                    "\n".join(set(citation_check.get("citations", [])))
+                    valid_citations_str
                 )}
             ]
             response_text = await client.chat(retry_messages, temperature=0.1, max_tokens=1024)
