@@ -2,8 +2,9 @@ import json
 import os
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
-LOG_FILE = "query_log.json"
+LOG_FILE = Path(__file__).parent.parent / "storage" / "query_log.json"
 
 def log_query(question: str, course_code: str, response: str, cited_sources: list = None):
     refusal_phrase = "I don't have enough information in the course materials"
