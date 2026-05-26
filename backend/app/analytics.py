@@ -12,7 +12,7 @@ def log_query(question: str, course_code: str, response: str, cited_sources: lis
     course_code = validate_course_code(course_code)
     question = sanitize_text(question, MAX_QUESTION_LENGTH)
     
-    refusal_phrase = "I don't have enough information in the course materials"
+    refusal_phrase = "This topic is not covered"
     out_of_scope = refusal_phrase in response
     
     log_entry = {
