@@ -74,7 +74,7 @@ def build_context_window(
             if content_type == "text"
             else f"<Document {i}: {title}, Slide {page}>"
         )
-        parts.append(f"{header}\n{text}\n</{content_type.title()} {i}>")
+        parts.append(f"{header}\n{text}\n</Text {i}>")
         available_citations.append(f"[Source: {title}, Slide {page}]")
 
     if image_chunks:
