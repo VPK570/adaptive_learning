@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
   sources?: { source_title: string; page: number; content_type: string }[];
 }
 
@@ -129,8 +130,9 @@ function ChatContent() {
     localStorage.setItem(`last_question_${courseCode}`, q);
 
     try {
-       const data = await apiFetch(`/query`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/query-stream`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: q,
           course_code: courseCode,
@@ -141,13 +143,51 @@ function ChatContent() {
         }),
       });
 
-      const assistantMsg: Message = {
-        role: "assistant",
-        content: data.response,
-        sources: data.cited_sources,
-      };
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No reader available");
+
+      const decoder = new TextDecoder();
+      let assistantMsg: Message = { role: "assistant", content: "", thinking: "" };
       setMessages((prev) => [...prev, assistantMsg]);
-      setConversationHistory((prev) => [...prev, { role: "assistant", content: data.response }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          
+          try {
+            const data = JSON.parse(line.slice(6));
+            
+            if (data.type === "thinking") {
+              assistantMsg.thinking = (assistantMsg.thinking || "") + data.content;
+            } else if (data.type === "content") {
+              assistantMsg.content += data.content;
+            } else if (data.type === "metadata") {
+              assistantMsg.sources = data.cited_sources;
+            }
+            
+            // Update the last message in the list
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              newMessages[newMessages.length - 1] = { ...assistantMsg };
+              return newMessages;
+            });
+          } catch (e) {
+            console.error("Error parsing stream chunk", e);
+          }
+        }
+      }
+      
+      setConversationHistory((prev) => [...prev, { role: "assistant", content: assistantMsg.content }]);
       
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -242,6 +282,21 @@ function ChatContent() {
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                       </button>
+                    )}
+                    
+                    {msg.thinking && (
+                      <div className="mb-3 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-500 font-mono overflow-hidden">
+                        <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-widest text-[10px] text-slate-400">
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Thinking Process
+                        </div>
+                        <div className="whitespace-pre-wrap opacity-70 italic">
+                          {msg.thinking}
+                        </div>
+                      </div>
                     )}
                     
                     {isRefusal && (
