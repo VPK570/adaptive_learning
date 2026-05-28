@@ -340,16 +340,6 @@ async def query_stream(body: QueryRequest):
     course_code = validate_course_code(body.course_code)
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
-
-    chunks = await rag.retrieve(
-        query=question,
-        course_code=course_code,
-        top_k=body.top_k,
-    )
-
-    if not chunks:
-        # For streaming, we might want to yield an error or raise HTTPException
-        raise HTTPException(404, "No chunks found. Ingest documents first.")
     
     history = get_course_history(body.course_code, body.session_id)
 
@@ -361,10 +351,10 @@ async def query_stream(body: QueryRequest):
             query=question,
             course_code=course_code,
             course_name=course_code,
-            chunks=chunks,
             language=body.language,
             mastery=body.mastery,
-            history=history
+            history=history,
+            top_k=body.top_k
         ):
             if chunk["type"] == "content":
                 full_response += chunk["content"]
@@ -388,24 +378,16 @@ async def query(body: QueryRequest):
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
 
-    chunks = await rag.retrieve(
-        query=question,
-        course_code=course_code,
-        top_k=body.top_k,
-    )
-
-    if not chunks:
-        raise HTTPException(404, "No chunks found. Ingest documents first.")
     history = get_course_history(body.course_code, body.session_id)
 
     result = await engine.query(
         query=question,
         course_code=course_code,
         course_name=course_code, # Use course_code as name if name not available
-        chunks=chunks,
         language=body.language,
         mastery=body.mastery,
-        history=history
+        history=history,
+        top_k=body.top_k
     )
 
     # Log the query for analytics
