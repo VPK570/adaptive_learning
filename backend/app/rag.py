@@ -241,6 +241,7 @@ class RAGPipeline:
         seen_ids: set[str] = set()
         all_chunks: list[dict[str, Any]] = []
 
+        # 1. Vector Search (Text)
         if content_type is None or content_type == "text":
             text_results = self.text_collection.query(
                 query_embeddings=[query_embedding],
@@ -248,24 +249,31 @@ class RAGPipeline:
                 where=where_filter,
                 include=["documents", "metadatas", "distances"],
             )
+            self._process_results(text_results, all_chunks, seen_ids, "text")
 
-            if text_results and text_results["ids"] and text_results["ids"][0]:
-                for i in range(len(text_results["ids"][0])):
-                    chunk_id = text_results["ids"][0][i]
-                    if chunk_id in seen_ids:
-                        continue
-                    seen_ids.add(chunk_id)
-                    meta = text_results["metadatas"][0][i] if text_results["metadatas"] else {}
-                    all_chunks.append({
-                        "chunk_id": chunk_id,
-                        "text": text_results["documents"][0][i] if text_results["documents"] else "",
-                        "source_title": meta.get("source_title", "Unknown"),
-                        "page": meta.get("page", 1),
-                        "topic": meta.get("topic", ""),
-                        "content_type": "text",
-                        "distance": text_results["distances"][0][i] if text_results["distances"] else 0.0,
-                    })
+        # 2. Keyword Search (Text) - Simple fallback for better recall on specific terms
+        # Only do this if we have few results or for text
+        if (content_type is None or content_type == "text") and len(query.split()) < 10:
+            # We take the first 3 words of the query as keywords
+            keywords = [w.lower() for w in query.split() if len(w) > 3][:3]
+            for kw in keywords:
+                kw_results = self.text_collection.get(
+                    where={"$and": [where_filter, {"course_code": course_code}]},
+                    where_document={"$contains": kw},
+                    limit=5,
+                    include=["documents", "metadatas"],
+                )
+                if kw_results and kw_results["ids"]:
+                    # Convert GET results format to match QUERY results format for processing
+                    formatted_kw = {
+                        "ids": [kw_results["ids"]],
+                        "documents": [kw_results["documents"]],
+                        "metadatas": [kw_results["metadatas"]],
+                        "distances": [[0.1] * len(kw_results["ids"])] # Artificial distance for keyword matches
+                    }
+                    self._process_results(formatted_kw, all_chunks, seen_ids, "text")
 
+        # 3. Vector Search (Image)
         if content_type is None or content_type == "image":
             image_results = self.image_collection.query(
                 query_embeddings=[query_embedding],
@@ -273,24 +281,7 @@ class RAGPipeline:
                 where=where_filter,
                 include=["documents", "metadatas", "distances"],
             )
-
-            if image_results and image_results["ids"] and image_results["ids"][0]:
-                for i in range(len(image_results["ids"][0])):
-                    chunk_id = image_results["ids"][0][i]
-                    if chunk_id in seen_ids:
-                        continue
-                    seen_ids.add(chunk_id)
-                    meta = image_results["metadatas"][0][i] if image_results["metadatas"] else {}
-                    all_chunks.append({
-                        "chunk_id": chunk_id,
-                        "text": image_results["documents"][0][i] if image_results["documents"] else "",
-                        "source_title": meta.get("source_title", "Unknown"),
-                        "page": meta.get("page", 1),
-                        "topic": meta.get("topic", ""),
-                        "content_type": "image",
-                        "mime_type": meta.get("mime_type", "image/png"),
-                        "distance": image_results["distances"][0][i] if image_results["distances"] else 0.0,
-                    })
+            self._process_results(image_results, all_chunks, seen_ids, "image")
 
         all_chunks.sort(key=lambda x: x["distance"])
 
@@ -298,6 +289,24 @@ class RAGPipeline:
             all_chunks = all_chunks[: k * 2]
 
         return all_chunks
+
+    def _process_results(self, results, all_chunks, seen_ids, default_type):
+        if results and results["ids"] and results["ids"][0]:
+            for i in range(len(results["ids"][0])):
+                chunk_id = results["ids"][0][i]
+                if chunk_id in seen_ids:
+                    continue
+                seen_ids.add(chunk_id)
+                meta = results["metadatas"][0][i] if results["metadatas"] else {}
+                all_chunks.append({
+                    "chunk_id": chunk_id,
+                    "text": results["documents"][0][i] if results["documents"] else "",
+                    "source_title": meta.get("source_title", "Unknown"),
+                    "page": meta.get("page", 1),
+                    "topic": meta.get("topic", ""),
+                    "content_type": meta.get("content_type", default_type),
+                    "distance": results["distances"][0][i] if results["distances"] else 0.5,
+                })
 
     def count_chunks(self, course_code: str) -> int:
         text_count = 0
