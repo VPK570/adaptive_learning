@@ -216,6 +216,62 @@ class OpenRouterClient:
             data = response.json()
             return data["choices"][0]["message"]["content"]
 
+    async def stream(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 1024,
+    ):
+        model = model or self.llm_model
+        
+        request_body: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        
+        # We try to enable thinking for streaming as well if supported by model
+        # but for now let's stick to standard streaming.
+        
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=request_body,
+            ) as response:
+                if not response.is_success:
+                    body = await response.aread()
+                    print(f"[stream] HTTP {response.status_code}: {body.decode()[:300]}")
+                    raise ValueError(f"stream failed: {body.decode()[:200]}")
+                
+                import json
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    
+                    try:
+                        data = json.loads(data_str)
+                        choice = data.get("choices", [{}])[0]
+                        delta = choice.get("delta", {})
+                        
+                        # Handle thinking if present
+                        if "thinking" in delta:
+                            yield {"type": "thinking", "content": delta["thinking"]}
+                        
+                        if "content" in delta and delta["content"]:
+                            yield {"type": "content", "content": delta["content"]}
+                            
+                    except json.JSONDecodeError:
+                        continue
+
     async def chat_with_schema(
         self,
         messages: list[dict[str, str]],
