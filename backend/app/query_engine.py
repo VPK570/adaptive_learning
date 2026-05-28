@@ -125,6 +125,90 @@ def build_tutor_prompt(
 
 
 class QueryEngine:
+    async def query_stream(
+        self,
+        query: str,
+        course_code: str,
+        course_name: str,
+        chunks: list[dict],
+        history: list[dict] | None = None,
+        language: str = "English",
+        mastery: float | None = None,
+    ):
+        """
+        Streaming query pipeline:
+        1. Check curriculum scope
+        2. Build prompt
+        3. Stream LLM response (thinking + content)
+        4. Return metadata at the end
+        """
+        if not await curriculum.check_topic_in_curriculum(course_code, query):
+             yield {"type": "content", "content": "This topic is not covered in your course materials."}
+             yield {"type": "metadata", "out_of_scope": True, "cited_sources": []}
+             return
+
+        messages = build_tutor_prompt(
+            query=query,
+            course_code=course_code,
+            course_name=course_name,
+            chunks=chunks,
+            history=history or [],
+            language=language,
+            mastery=mastery,
+        )
+
+        # Step 2.5: Generate Strategy (Open-Notebook style)
+        strategy_prompt = messages + [
+            {"role": "user", "content": "Briefly outline your strategy for answering this student's question based on the provided materials. Keep it to 2-3 sentences."}
+        ]
+        strategy_text = await client.chat(strategy_prompt, temperature=0.2, max_tokens=150)
+        if strategy_text:
+            yield {"type": "thinking", "content": strategy_text + "\n\n"}
+
+        full_response = ""
+        async for chunk in client.stream(messages, temperature=0.3, max_tokens=1024):
+            if chunk["type"] == "content":
+                full_response += chunk["content"]
+            yield chunk
+
+        # After streaming completes, we can extract citations for metadata
+        # Note: We can't easily do self-correction retry in streaming mode 
+        # without restarting the stream, so we just provide the citations as they are.
+        
+        citations = extract_all_citations(full_response)
+        actually_cited = []
+        seen_keys = set()
+        for cit in citations:
+            c_title, c_page = parse_citation(cit)
+            if not c_title or not c_page:
+                continue
+            
+            for c in chunks:
+                v_title = c.get("source_title", "").lower()
+                v_page = str(c.get("page", ""))
+                key = (v_title, v_page)
+                if key in seen_keys: continue
+
+                if v_page == c_page and (v_title in c_title or c_title in v_title):
+                    actually_cited.append({
+                        "source_title": c.get("source_title", ""),
+                        "page": c.get("page", ""),
+                        "content_type": c.get("content_type", "text"),
+                        "has_image": c.get("has_image", False),
+                    })
+                    seen_keys.add(key)
+
+        text_chunks = [c for c in chunks if c.get("content_type", "text") != "image"]
+        image_chunks = [c for c in chunks if c.get("content_type") == "image" or c.get("has_image")]
+
+        yield {
+            "type": "metadata",
+            "cited_sources": actually_cited,
+            "chunks_retrieved": len(chunks),
+            "text_chunks": len(text_chunks),
+            "image_chunks": len(image_chunks),
+        }
+
     async def query(
         self,
         query: str,
