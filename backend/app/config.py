@@ -10,6 +10,12 @@ def get_settings() -> "Settings":
 
 
 class Settings:
+    SURREAL_URL: str = os.getenv("SURREAL_URL", "ws://localhost:8000/rpc")
+    SURREAL_NS: str = os.getenv("SURREAL_NS", "adaptive_learning")
+    SURREAL_DB: str = os.getenv("SURREAL_DB", "learning_platform")
+    SURREAL_USER: str = os.getenv("SURREAL_USER", "root")
+    SURREAL_PASS: str = os.getenv("SURREAL_PASS", "root")
+
     CHROMA_PATH: str = os.getenv("CHROMA_PATH", "./chroma_db")
 
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
