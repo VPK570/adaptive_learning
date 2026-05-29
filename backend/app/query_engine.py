@@ -134,13 +134,16 @@ def build_tutor_prompt(
 
 class QueryEngine:
     async def _get_gatekeeper_context(self, course_code: str) -> tuple[list[str], str]:
-        stats = rag_pipeline.get_course_stats(course_code)
+        stats = await rag_pipeline.get_course_stats(course_code)
         doc_titles = [d["name"] for d in stats.get("documents", [])]
         
-        # Get curriculum text
-        curr_collection = curriculum_manager._get_curriculum_collection(course_code)
-        curr_data = curr_collection.get(include=["documents"])
-        curriculum_text = "\n".join(curr_data.get("documents", []) or [])
+        from app.db import get_db
+        db = await get_db()
+        curr_res = await db.query(
+            "SELECT text FROM curriculum_chunk WHERE course_code = $code",
+            {"code": course_code}
+        )
+        curriculum_text = "\n".join([r["text"] for r in (curr_res[0]["result"] if curr_res else [])])
         
         return doc_titles, curriculum_text
 

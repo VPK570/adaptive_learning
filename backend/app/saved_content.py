@@ -1,68 +1,54 @@
-import json
-import os
-import uuid
 from datetime import datetime
-from app.config import settings
-from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
+from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH, sanitize_id
+from app.db import get_db
 
 class SavedContentManager:
-    def __init__(self):
-        self.flashcards_file = os.path.join(settings.FLASHCARDS_DIR, "saved_flashcards.json")
-        self.quizzes_file = os.path.join(settings.QUIZZES_DIR, "saved_quizzes.json")
-        self._init_files()
-
-    def _init_files(self):
-        os.makedirs(settings.FLASHCARDS_DIR, exist_ok=True)
-        os.makedirs(settings.QUIZZES_DIR, exist_ok=True)
-        if not os.path.exists(self.flashcards_file):
-            with open(self.flashcards_file, 'w') as f:
-                json.dump([], f)
-        if not os.path.exists(self.quizzes_file):
-            with open(self.quizzes_file, 'w') as f:
-                json.dump([], f)
-
-    def _read_json(self, file):
-        with open(file, 'r') as f:
-            return json.load(f)
-
-    def _write_json(self, file, data):
-        with open(file, 'w') as f:
-            json.dump(data, f, indent=2)
-
-    def save_flashcards(self, course_code, topic, cards):
+    async def save_flashcards(self, course_code, topic, cards):
         course_code = validate_course_code(course_code)
         topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
-        data = self._read_json(self.flashcards_file)
+        
+        db = await get_db()
         new_set = {
-            "id": str(uuid.uuid4()),
             "course_code": course_code,
             "topic": topic,
             "cards": cards,
             "created_at": datetime.now().isoformat()
         }
-        data.append(new_set)
-        self._write_json(self.flashcards_file, data)
+        res = await db.query("CREATE flashcard_set CONTENT $content", {"content": new_set})
+        if res and res[0]["result"]:
+            item = res[0]["result"][0]
+            item["id"] = str(item["id"])
+            return item
         return new_set
 
-    def get_saved_flashcards(self, course_code):
+    async def get_saved_flashcards(self, course_code):
         course_code = validate_course_code(course_code)
-        data = self._read_json(self.flashcards_file)
-        return [c for c in data if c["course_code"] == course_code]
+        db = await get_db()
+        res = await db.query("SELECT * FROM flashcard_set WHERE course_code = $code ORDER BY created_at DESC", {"code": course_code})
+        if res and res[0]["result"]:
+            results = res[0]["result"]
+            for r in results:
+                r["id"] = str(r["id"])
+            return results
+        return []
 
-    def delete_flashcards(self, set_id):
-        data = self._read_json(self.flashcards_file)
-        new_data = [c for c in data if c["id"] != set_id]
-        if len(new_data) == len(data):
-            return False
-        self._write_json(self.flashcards_file, new_data)
-        return True
+    async def delete_flashcards(self, set_id):
+        db = await get_db()
+        # Ensure set_id is correctly formatted for SurrealDB record ID if needed, 
+        # or just use it as string if it was returned as such.
+        # SurrealDB IDs are like flashcard_set:id
+        if ":" not in set_id:
+            set_id = f"flashcard_set:{set_id}"
+            
+        res = await db.query("DELETE $id", {"id": set_id})
+        return bool(res and res[0]["status"] == "OK")
 
-    def save_quiz(self, course_code, topic, questions, score):
+    async def save_quiz(self, course_code, topic, questions, score):
         course_code = validate_course_code(course_code)
         topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
-        data = self._read_json(self.quizzes_file)
+        
+        db = await get_db()
         new_quiz = {
-            "id": str(uuid.uuid4()),
             "course_code": course_code,
             "topic": topic,
             "questions": questions,
@@ -70,19 +56,27 @@ class SavedContentManager:
             "total": len(questions),
             "created_at": datetime.now().isoformat()
         }
-        data.append(new_quiz)
-        self._write_json(self.quizzes_file, data)
+        res = await db.query("CREATE quiz CONTENT $content", {"content": new_quiz})
+        if res and res[0]["result"]:
+            item = res[0]["result"][0]
+            item["id"] = str(item["id"])
+            return item
         return new_quiz
 
-    def get_saved_quizzes(self, course_code):
+    async def get_saved_quizzes(self, course_code):
         course_code = validate_course_code(course_code)
-        data = self._read_json(self.quizzes_file)
-        return [q for q in data if q["course_code"] == course_code]
+        db = await get_db()
+        res = await db.query("SELECT * FROM quiz WHERE course_code = $code ORDER BY created_at DESC", {"code": course_code})
+        if res and res[0]["result"]:
+            results = res[0]["result"]
+            for r in results:
+                r["id"] = str(r["id"])
+            return results
+        return []
 
-    def delete_quiz(self, quiz_id):
-        data = self._read_json(self.quizzes_file)
-        new_data = [q for q in data if q["id"] != quiz_id]
-        if len(new_data) == len(data):
-            return False
-        self._write_json(self.quizzes_file, new_data)
-        return True
+    async def delete_quiz(self, quiz_id):
+        db = await get_db()
+        if ":" not in quiz_id:
+            quiz_id = f"quiz:{quiz_id}"
+        res = await db.query("DELETE $id", {"id": quiz_id})
+        return bool(res and res[0]["status"] == "OK")

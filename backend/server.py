@@ -153,20 +153,20 @@ async def health():
 @app.get("/stats")
 async def get_stats(course_code: str = "BAECE102"):
     course_code = validate_course_code(course_code)
-    stats = rag.get_course_stats(course_code)
+    stats = await rag.get_course_stats(course_code)
     return stats
 
 
 @app.get("/curriculum/topics")
 async def get_course_topics(course: str = Query(...)):
     course = validate_course_code(course)
-    return curriculum.get_curriculum_topics(course)
+    return await curriculum.get_curriculum_topics(course)
 
 
 @app.get("/curriculum")
 async def list_curriculum_files(course: str = Query(...)):
     course = validate_course_code(course)
-    return curriculum.list_curriculum(course)
+    return await curriculum.list_curriculum(course)
 
 
 @app.post("/curriculum")
@@ -204,26 +204,26 @@ async def upload_curriculum(
 @app.get("/analytics")
 async def analytics(course_code: str = "BAECE102"):
     course_code = validate_course_code(course_code)
-    return get_analytics(course_code)
+    return await get_analytics(course_code)
 
 
 @app.get("/analytics/unanswered")
 async def unanswered(course_code: str = "BAECE102"):
     course_code = validate_course_code(course_code)
-    return get_unanswered_questions(course_code)
+    return await get_unanswered_questions(course_code)
 
 
 @app.get("/analytics/coverage")
 async def coverage(course_code: str = "BAECE102"):
     course_code = validate_course_code(course_code)
-    return get_coverage(course_code)
+    return await get_coverage(course_code)
 
 
 @app.get("/chat-history")
 async def get_history(course_code: str, session_id: str):
     course_code = validate_course_code(course_code)
     session_id = sanitize_id(session_id)
-    return get_course_history(course_code, session_id)
+    return await get_course_history(course_code, session_id)
 
 
 @app.post("/chat-history")
@@ -232,7 +232,7 @@ async def save_chat_message(course_code: str, session_id: str, role: str, conten
     session_id = sanitize_id(session_id)
     role = sanitize_text(role, 20)
     content = sanitize_text(content, MAX_QUESTION_LENGTH * 2) # Allow more for response
-    add_message(course_code, session_id, role, content)
+    await add_message(course_code, session_id, role, content)
     return {"status": "success"}
 
 
@@ -240,23 +240,23 @@ async def save_chat_message(course_code: str, session_id: str, role: str, conten
 async def clear_history(course_code: str, session_id: str):
     course_code = validate_course_code(course_code)
     session_id = sanitize_id(session_id)
-    clear_course_history(course_code, session_id)
+    await clear_course_history(course_code, session_id)
     return {"status": "success"}
 
 
 @app.get("/questions")
 async def questions(course_code: str = "BAECE102"):
     course_code = validate_course_code(course_code)
-    return get_all_questions(course_code)
+    return await get_all_questions(course_code)
 
 
 @app.get("/courses")
 async def list_courses():
-    courses = get_all_courses_data()
+    courses = await get_all_courses_data()
     # Merge stats from ChromaDB
     for course in courses:
         cc = validate_course_code(course["course_code"])
-        stats = rag.get_course_stats(cc)
+        stats = await rag.get_course_stats(cc)
         course["doc_count"] = len(stats.get("documents", []))
         course["chunk_count"] = stats.get("total_chunks", 0)
     return courses
@@ -267,7 +267,7 @@ async def create_new_course(body: CourseCreate):
     try:
         # Pydantic already validated lengths
         course_code = validate_course_code(body.course_code)
-        new_course = create_course(course_code, body.course_name, body.description, body.icon)
+        new_course = await create_course(course_code, body.course_name, body.description, body.icon)
         return new_course
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -341,7 +341,7 @@ async def query_stream(body: QueryRequest):
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
     
-    history = get_course_history(body.course_code, body.session_id)
+    history = await get_course_history(body.course_code, body.session_id)
 
     async def stream_generator():
         full_response = ""
@@ -365,9 +365,9 @@ async def query_stream(body: QueryRequest):
         
         # After stream: Log and save history
         if full_response:
-            log_query(question, course_code, full_response, metadata.get("cited_sources", []))
-            add_message(course_code, session_id, "user", question)
-            add_message(course_code, session_id, "assistant", full_response)
+            await log_query(question, course_code, full_response, metadata.get("cited_sources", []))
+            await add_message(course_code, session_id, "user", question)
+            await add_message(course_code, session_id, "assistant", full_response)
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
@@ -378,7 +378,7 @@ async def query(body: QueryRequest):
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
 
-    history = get_course_history(body.course_code, body.session_id)
+    history = await get_course_history(body.course_code, body.session_id)
 
     result = await engine.query(
         query=question,
@@ -391,11 +391,11 @@ async def query(body: QueryRequest):
     )
 
     # Log the query for analytics
-    log_query(question, course_code, result["response"], result["cited_sources"])
+    await log_query(question, course_code, result["response"], result["cited_sources"])
     
     # Save to chat history
-    add_message(course_code, session_id, "user", question)
-    add_message(course_code, session_id, "assistant", result["response"])
+    await add_message(course_code, session_id, "user", question)
+    await add_message(course_code, session_id, "assistant", result["response"])
 
     return QueryResponse(
         response=result["response"],
@@ -410,7 +410,7 @@ async def query(body: QueryRequest):
 async def edit_course(course_code: str, body: CourseUpdate):
     try:
         course_code = validate_course_code(course_code)
-        updated = update_course(course_code, body.course_name, body.description, body.icon)
+        updated = await update_course(course_code, body.course_name, body.description, body.icon)
         return updated
     except ValueError as e:
         raise HTTPException(404, str(e))
@@ -420,7 +420,7 @@ async def edit_course(course_code: str, body: CourseUpdate):
 async def remove_course(course_code: str):
     try:
         course_code = validate_course_code(course_code)
-        delete_course(course_code)
+        await delete_course(course_code)
         return {"status": "success"}
     except ValueError as e:
         raise HTTPException(404, str(e))
@@ -469,17 +469,17 @@ MATERIALS:
 async def save_flashcards(body: SaveFlashcardRequest):
     course_code = validate_course_code(body.course_code)
     topic = sanitize_text(body.topic, MAX_TOPIC_LENGTH)
-    return saved_content.save_flashcards(course_code, topic, body.cards)
+    return await saved_content.save_flashcards(course_code, topic, body.cards)
 
 @app.get("/flashcards/saved")
 async def get_saved_flashcards(course: str = Query(...)):
     course = validate_course_code(course)
-    return saved_content.get_saved_flashcards(course)
+    return await saved_content.get_saved_flashcards(course)
 
 @app.delete("/flashcards/saved/{set_id}")
 async def delete_saved_flashcards(set_id: str):
     set_id = sanitize_id(set_id)
-    if not saved_content.delete_flashcards(set_id):
+    if not await saved_content.delete_flashcards(set_id):
         raise HTTPException(404, "Flashcard set not found.")
     return {"status": "success"}
 
@@ -521,17 +521,17 @@ MATERIALS:
 async def save_quiz(body: SaveQuizRequest):
     course_code = validate_course_code(body.course_code)
     topic = sanitize_text(body.topic, MAX_TOPIC_LENGTH)
-    return saved_content.save_quiz(course_code, topic, body.questions, body.score)
+    return await saved_content.save_quiz(course_code, topic, body.questions, body.score)
 
 @app.get("/quiz/saved")
 async def get_saved_quizzes(course: str = Query(...)):
     course = validate_course_code(course)
-    return saved_content.get_saved_quizzes(course)
+    return await saved_content.get_saved_quizzes(course)
 
 @app.delete("/quiz/saved/{quiz_id}")
 async def delete_saved_quiz(quiz_id: str):
     quiz_id = sanitize_id(quiz_id)
-    if not saved_content.delete_quiz(quiz_id):
+    if not await saved_content.delete_quiz(quiz_id):
         raise HTTPException(404, "Quiz not found.")
     return {"status": "success"}
 
