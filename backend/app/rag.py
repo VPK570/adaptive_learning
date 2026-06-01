@@ -170,62 +170,98 @@ class RAGPipeline:
         content_type: str | None = None,
     ) -> list[dict[str, Any]]:
         k = top_k or self.top_k
-        query_embedding = await client.embed_text(query)
         db = await get_db()
 
-        all_chunks = []
-        seen_ids = set()
+        text_results = []
+        image_results = []
 
-        # 1. Vector Search (Text)
+        # 1. Hybrid Search (Text)
         if content_type is None or content_type == "text":
-            text_query = """
-                SELECT *, vector::distance::cosine(embedding, $query_vec) AS distance 
+            query_embedding = await client.embed_text(query)
+            
+            # A. Vector Search
+            vector_query = f"""
+                SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM text_chunk 
                 WHERE course_code = $course 
-                AND embedding <| $k, MTREE |> $query_vec
+                AND embedding <| {k}, COSINE |> $query_vec
             """
-            params = {"query_vec": query_embedding, "course": course_code, "k": k}
+            v_params = {"query_vec": query_embedding, "course": course_code}
             if topic:
-                text_query += " AND topic = $topic"
-                params["topic"] = topic
+                vector_query += " AND topic = $topic"
+                v_params["topic"] = topic
             
-            res = await db.query(text_query, params)
-            if res and res[0]["result"]:
-                for row in res[0]["result"]:
-                    row["chunk_id"] = str(row["id"])
-                    all_chunks.append(row)
-                    seen_ids.add(row["id"])
+            vector_hits = await db.query(vector_query, v_params)
+            if not isinstance(vector_hits, list):
+                vector_hits = []
+            
+            for hit in vector_hits:
+                hit["distance"] = 1.0 - hit.get("similarity", 0.0)
 
-        # 2. Keyword Search Fallback (Text)
-        if (content_type is None or content_type == "text") and len(query.split()) < 10:
-            keywords = [w.lower() for w in query.split() if len(w) > 3][:3]
-            for kw in keywords:
-                kw_query = "SELECT * FROM text_chunk WHERE course_code = $course AND text CONTAINS $kw LIMIT 5"
-                res = await db.query(kw_query, {"course": course_code, "kw": kw})
-                if res and res[0]["result"]:
-                    for row in res[0]["result"]:
-                        if row["id"] not in seen_ids:
-                            row["chunk_id"] = str(row["id"])
-                            row["distance"] = 0.1 # Artificial
-                            all_chunks.append(row)
-                            seen_ids.add(row["id"])
+            # B. BM25 Search
+            bm25_query = f"""
+                SELECT *, search::score(0) AS bm25_score 
+                FROM text_chunk 
+                WHERE course_code = $course 
+                AND text @0@ $query
+                LIMIT {k}
+            """
+            b_params = {"query": query, "course": course_code}
+            if topic:
+                bm25_query += " AND topic = $topic"
+                b_params["topic"] = topic
+            
+            bm25_hits = await db.query(bm25_query, b_params)
+            if not isinstance(bm25_hits, list):
+                bm25_hits = []
 
-        # 3. Vector Search (Image)
+            # C. Reciprocal Rank Fusion (RRF)
+            rrf_k = 60
+            scores = {}
+            doc_map = {}
+
+            for rank, doc in enumerate(vector_hits):
+                doc_id = str(doc["id"])
+                doc_map[doc_id] = doc
+                scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (rrf_k + rank + 1)
+            
+            for rank, doc in enumerate(bm25_hits):
+                doc_id = str(doc["id"])
+                if doc_id not in doc_map:
+                    doc_map[doc_id] = doc
+                scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (rrf_k + rank + 1)
+
+            sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+            text_results = [doc_map[doc_id] for doc_id in sorted_ids[:k]]
+            for doc in text_results:
+                doc["chunk_id"] = str(doc["id"])
+
+        # 2. Vector Search (Image)
         if content_type is None or content_type == "image":
-            img_query = """
-                SELECT *, vector::distance::cosine(embedding, $query_vec) AS distance 
+            query_embedding = await client.embed_text(query)
+            img_query = f"""
+                SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM image_chunk 
                 WHERE course_code = $course 
-                AND embedding <| $k, MTREE |> $query_vec
+                AND embedding <| {k}, COSINE |> $query_vec
             """
-            res = await db.query(img_query, {"query_vec": query_embedding, "course": course_code, "k": k})
-            if res and res[0]["result"]:
-                for row in res[0]["result"]:
+            image_hits = await db.query(img_query, {"query_vec": query_embedding, "course": course_code})
+            if isinstance(image_hits, list):
+                for row in image_hits:
                     row["chunk_id"] = str(row["id"])
-                    all_chunks.append(row)
+                    row["distance"] = 1.0 - row.get("similarity", 0.0)
+                    image_results.append(row)
 
-        all_chunks.sort(key=lambda x: x.get("distance", 1.0))
-        return all_chunks[: k * 2] if content_type is None else all_chunks[:k]
+        if content_type == "text":
+            return text_results
+        if content_type == "image":
+            image_results.sort(key=lambda x: x.get("distance", 1.0))
+            return image_results
+        
+        # Combined results
+        all_results = text_results + image_results
+        # Simple heuristic to interleave or sort combined
+        return all_results[:k*2]
 
     async def get_course_stats(self, course_code: str) -> dict[str, Any]:
         db = await get_db()
@@ -234,20 +270,30 @@ class RAGPipeline:
         text_count_res = await db.query("SELECT count() FROM text_chunk WHERE course_code = $code GROUP ALL", {"code": course_code})
         img_count_res = await db.query("SELECT count() FROM image_chunk WHERE course_code = $code GROUP ALL", {"code": course_code})
         
-        text_chunks = text_count_res[0]["result"][0]["count"] if text_count_res and text_count_res[0]["result"] else 0
-        image_chunks = img_count_res[0]["result"][0]["count"] if img_count_res and img_count_res[0]["result"] else 0
+        text_chunks = text_count_res[0]["count"] if isinstance(text_count_res, list) and len(text_count_res) > 0 else 0
+        image_chunks = img_count_res[0]["count"] if isinstance(img_count_res, list) and len(img_count_res) > 0 else 0
         
         # Topics and documents
         topics_res = await db.query("SELECT topic, count() as count FROM (SELECT topic FROM text_chunk WHERE course_code = $code) GROUP BY topic", {"code": course_code})
-        docs_res = await db.query("SELECT source_title, count() as count FROM (SELECT source_title FROM text_chunk WHERE course_code = $code UNION SELECT source_title FROM image_chunk WHERE course_code = $code) GROUP BY source_title", {"code": course_code})
+        
+        docs_text = await db.query("SELECT source_title FROM text_chunk WHERE course_code = $code GROUP BY source_title", {"code": course_code})
+        docs_img = await db.query("SELECT source_title FROM image_chunk WHERE course_code = $code GROUP BY source_title", {"code": course_code})
+        
+        all_doc_names = set()
+        if isinstance(docs_text, list):
+            for r in docs_text:
+                all_doc_names.add(r["source_title"])
+        if isinstance(docs_img, list):
+            for r in docs_img:
+                all_doc_names.add(r["source_title"])
         
         return {
             "course_code": course_code,
             "total_chunks": text_chunks + image_chunks,
             "text_chunks": text_chunks,
             "image_chunks": image_chunks,
-            "topics": [{"topic": r["topic"], "chunks": r["count"]} for r in (topics_res[0]["result"] if topics_res else []) if r["topic"]],
-            "documents": [{"name": r["source_title"], "chunks": r["count"]} for r in (docs_res[0]["result"] if docs_res else [])],
+            "topics": [{"topic": r["topic"], "chunks": r["count"]} for r in (topics_res if isinstance(topics_res, list) else []) if r.get("topic")],
+            "documents": [{"name": name} for name in all_doc_names],
         }
 
     async def delete_course(self, course_code: str) -> int:
@@ -255,3 +301,22 @@ class RAGPipeline:
         res1 = await db.query("DELETE text_chunk WHERE course_code = $code", {"code": course_code})
         res2 = await db.query("DELETE image_chunk WHERE course_code = $code", {"code": course_code})
         return len(res1[0]["result"] if res1 else []) + len(res2[0]["result"] if res2 else [])
+
+    async def count_chunks(self, course_code: str) -> int:
+        stats = await self.get_course_stats(course_code)
+        return stats["total_chunks"]
+
+    async def list_courses(self) -> list[str]:
+        db = await get_db()
+        res_text = await db.query("SELECT course_code FROM text_chunk GROUP BY course_code")
+        res_img = await db.query("SELECT course_code FROM image_chunk GROUP BY course_code")
+        
+        all_courses = set()
+        if isinstance(res_text, list):
+            for r in res_text:
+                all_courses.add(r["course_code"])
+        if isinstance(res_img, list):
+            for r in res_img:
+                all_courses.add(r["course_code"])
+                
+        return sorted(list(all_courses))
