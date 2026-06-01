@@ -1,53 +1,41 @@
-import json
-import os
 from datetime import datetime
-from app.config import settings
 from app.validation import validate_course_code, sanitize_id
+from app.db import get_db
 
-def get_history_path(course_code):
-    course_code = validate_course_code(course_code)
-    os.makedirs(settings.CHAT_HISTORY_DIR, exist_ok=True)
-    return os.path.join(settings.CHAT_HISTORY_DIR, f"{course_code}_history.json")
-
-def load_history(course_code):
-    history_file = get_history_path(course_code)
-    if not os.path.exists(history_file):
-        return {}
-    try:
-        with open(history_file, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
-
-def save_history(course_code, history):
-    with open(get_history_path(course_code), "w") as f:
-        json.dump(history, f, indent=2)
-
-def get_course_history(course_code, session_id):
-    course_code = validate_course_code(course_code)
-    session_id = sanitize_id(session_id)
-    history = load_history(course_code)
-    return history.get(session_id, [])
-
-def add_message(course_code, session_id, role, content):
+async def get_course_history(course_code, session_id):
     course_code = validate_course_code(course_code)
     session_id = sanitize_id(session_id)
     
-    history = load_history(course_code)
-    if session_id not in history:
-        history[session_id] = []
+    db = await get_db()
+    res = await db.query(
+        "SELECT * FROM chat_history WHERE course_code = $course AND session_id = $session ORDER BY timestamp ASC",
+        {"course": course_code, "session": session_id}
+    )
     
-    history[session_id].append({
+    if res and res[0]["result"]:
+        return res[0]["result"]
+    return []
+
+async def add_message(course_code, session_id, role, content):
+    course_code = validate_course_code(course_code)
+    session_id = sanitize_id(session_id)
+    
+    db = await get_db()
+    message = {
+        "course_code": course_code,
+        "session_id": session_id,
         "role": role,
         "content": content,
         "timestamp": datetime.utcnow().isoformat()
-    })
-    save_history(course_code, history)
+    }
+    await db.query("CREATE chat_history CONTENT $msg", {"msg": message})
 
-def clear_course_history(course_code, session_id):
+async def clear_course_history(course_code, session_id):
     course_code = validate_course_code(course_code)
     session_id = sanitize_id(session_id)
-    history = load_history(course_code)
-    if session_id in history:
-        del history[session_id]
-        save_history(course_code, history)
+    
+    db = await get_db()
+    await db.query(
+        "DELETE chat_history WHERE course_code = $course AND session_id = $session",
+        {"course": course_code, "session": session_id}
+    )
