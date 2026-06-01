@@ -92,7 +92,7 @@ async def run_ingest(course: str, title: str, filepath: str, topic: str):
     from app.db import reset as _reset_db
     from app.rag import RAGPipeline
 
-    _reset_db()
+    await _reset_db()
     rag = RAGPipeline()
 
     print(f"Extracting content from: {filepath}")
@@ -132,7 +132,7 @@ async def run_ingest_batch(course: str, directory: str, glob_pattern: str):
     from app.db import reset as _reset_db
     from app.rag import RAGPipeline
 
-    _reset_db()
+    await _reset_db()
     rag = RAGPipeline()
 
     pattern = os.path.join(directory, glob_pattern)
@@ -332,14 +332,14 @@ async def run_evaluation(course: str, cases: int, report: bool):
 async def print_stats(course: str):
     from app.rag import RAGPipeline
     rag = RAGPipeline()
-    stats = rag.get_course_stats(course)
+    stats = await rag.get_course_stats(course)
     print(f"  Stats: {stats['total_chunks']} total chunks "
           f"({stats['text_chunks']} text, {stats['image_chunks']} image)")
 
 
 async def run_stats(course: str):
     rag = RAGPipeline()
-    stats = rag.get_course_stats(course)
+    stats = await rag.get_course_stats(course)
     print(f"Course: {stats['course_code']}")
     print(f"Total chunks: {stats['total_chunks']}")
     print(f"  Text chunks: {stats['text_chunks']}")

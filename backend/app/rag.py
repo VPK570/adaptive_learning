@@ -1,26 +1,12 @@
-"""RAG pipeline — ingest documents and retrieve via ChromaDB.
-
-Uses two separate ChromaDB collections to handle dimension mismatch:
-- text_chunks: text-only content, embedded via Nemotron text mode
-- image_chunks: images embedded natively via Nemotron VL (multimodal)
-
-Images are validated via magic bytes in pdf_extractor. Invalid images are skipped.
-Images are stored in metadata as reference text only (no base64 — too large for ChromaDB).
-"""
-
 import uuid
 from typing import Any
-
 from app.config import settings
 from app.chunker import chunk_text, clean_text
 from app.openrouter import client
-from app.db import get_collection
-
+from app.db import get_db
 
 class RAGPipeline:
     def __init__(self):
-        self.text_collection = get_collection("text_chunks")
-        self.image_collection = get_collection("image_chunks")
         self.top_k = settings.RAG_TOP_K
         self.chunk_size = settings.CHUNK_SIZE
         self.overlap = settings.CHUNK_OVERLAP_TOKENS
@@ -47,39 +33,31 @@ class RAGPipeline:
             return {"chunks_ingested": 0, "error": "No non-empty chunks to embed"}
 
         embeddings = await client.embed_text_batch(chunk_texts)
+        db = await get_db()
 
-        ids: list[str] = []
-        documents: list[str] = []
-        metadatas: list[dict[str, Any]] = []
-
+        chunks_to_insert = []
         for i, (text_chunk, start, end) in enumerate(raw_chunks):
             if not text_chunk.strip():
                 continue
-            chunk_id = str(uuid.uuid4())
             page_approx = int((start / max(len(cleaned), 1)) * 100) + 1
 
-            ids.append(chunk_id)
-            documents.append(text_chunk)
-            metadatas.append({
+            chunk_data = {
                 "course_code": course_code,
                 "source_title": document_title,
                 "topic": topic,
                 "page": page_approx,
-                "section": "",
-                "difficulty": "",
+                "text": text_chunk,
+                "embedding": embeddings[i],
                 "content_type": "text",
                 **(metadata or {}),
-            })
+            }
+            chunks_to_insert.append(chunk_data)
 
-        self.text_collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
-        )
+        if chunks_to_insert:
+            await db.query("INSERT INTO text_chunk $chunks", {"chunks": chunks_to_insert})
 
         return {
-            "chunks_ingested": len(chunk_texts),
+            "chunks_ingested": len(chunks_to_insert),
             "course_code": course_code,
             "document_title": document_title,
         }
@@ -106,43 +84,35 @@ class RAGPipeline:
             return {"chunks_ingested": 0, "skipped": len(image_items)}
 
         if len(valid_items) > self.image_max_per_pdf:
-            print(f"  Limiting to {self.image_max_per_pdf} images (had {len(valid_items)})")
             valid_items = valid_items[:self.image_max_per_pdf]
 
         result = await client.embed_images(valid_items, max_batch_size=self.image_max_batch)
-
         embeddings = result["embeddings"]
         skipped = len(image_items) - len(valid_items) + result["skipped"]
 
-        ids: list[str] = []
-        documents: list[str] = []
-        metadatas: list[dict[str, Any]] = []
-
-        for i, (item, embedding) in enumerate(zip(valid_items, embeddings)):
-            ids.append(str(uuid.uuid4()))
+        db = await get_db()
+        chunks_to_insert = []
+        for item, embedding in zip(valid_items, embeddings):
             text_desc = item.get("text", f"Image from {document_title}")
-            documents.append(text_desc)
-            metadatas.append({
+            chunk_data = {
                 "course_code": course_code,
                 "source_title": document_title,
                 "topic": topic,
                 "page": item.get("page", 1),
+                "text": text_desc,
+                "embedding": embedding,
                 "content_type": "image",
                 "mime_type": item.get("mime_type", "image/png"),
                 "image_size_kb": len(item["image_b64"]) // 1024,
-                "difficulty": "",
                 **(metadata or {}),
-            })
+            }
+            chunks_to_insert.append(chunk_data)
 
-        self.image_collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
-        )
+        if chunks_to_insert:
+            await db.query("INSERT INTO image_chunk $chunks", {"chunks": chunks_to_insert})
 
         return {
-            "chunks_ingested": len(embeddings),
+            "chunks_ingested": len(chunks_to_insert),
             "skipped": skipped,
             "course_code": course_code,
             "document_title": document_title,
@@ -156,26 +126,15 @@ class RAGPipeline:
         topic: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        from app.pdf_extractor import (
-            extract_all_pages,
-            count_images_in_pdf,
-        )
-
-        stats = count_images_in_pdf(filepath)
-        print(f"  PDF: {stats['total_pages']} pages, "
-              f"{stats['valid_images']} valid images, "
-              f"{stats['invalid_images']} skipped (format), "
-              f"{stats['pages_with_images']} pages with images")
-
+        from app.pdf_extractor import extract_all_pages
         pages_content = await extract_all_pages(filepath)
 
-        text_parts: list[str] = []
-        all_image_items: list[dict[str, Any]] = []
+        text_parts = []
+        all_image_items = []
 
         for page in pages_content:
             if page.text.strip():
                 text_parts.append(f"[Page {page.page_num}]\n{page.text}")
-
             for img in page.images:
                 all_image_items.append({
                     "image_b64": img.b64_str,
@@ -189,30 +148,10 @@ class RAGPipeline:
 
         if text_parts:
             full_text = "\n\n".join(text_parts)
-            text_result = await self.ingest(
-                course_code=course_code,
-                document_title=document_title,
-                text=full_text,
-                topic=topic,
-                metadata=metadata,
-            )
+            text_result = await self.ingest(course_code, document_title, full_text, topic, metadata)
 
         if all_image_items:
-            try:
-                image_result = await self.ingest_images(
-                    course_code=course_code,
-                    document_title=document_title,
-                    image_items=all_image_items,
-                    topic=topic,
-                    metadata=metadata,
-                )
-            except Exception as e:
-                print(f"  ⚠ Image embedding error (text chunks still stored): {e}")
-                image_result = {"chunks_ingested": 0, "skipped": len(all_image_items)}
-
-        print(f"  ✓ {text_result['chunks_ingested']} text chunks + "
-              f"{image_result['chunks_ingested']} image chunks ingested"
-              + (f" ({image_result.get('skipped', 0)} skipped)" if image_result.get("skipped", 0) > 0 else ""))
+            image_result = await self.ingest_images(course_code, document_title, all_image_items, topic, metadata)
 
         return {
             "text_chunks": text_result["chunks_ingested"],
@@ -231,150 +170,88 @@ class RAGPipeline:
         content_type: str | None = None,
     ) -> list[dict[str, Any]]:
         k = top_k or self.top_k
-
         query_embedding = await client.embed_text(query)
+        db = await get_db()
 
-        where_filter: dict[str, Any] = {"course_code": course_code}
-        if topic:
-            where_filter["topic"] = topic
-
-        seen_ids: set[str] = set()
-        all_chunks: list[dict[str, Any]] = []
+        all_chunks = []
+        seen_ids = set()
 
         # 1. Vector Search (Text)
         if content_type is None or content_type == "text":
-            text_results = self.text_collection.query(
-                query_embeddings=[query_embedding],
-                n_results=k,
-                where=where_filter,
-                include=["documents", "metadatas", "distances"],
-            )
-            self._process_results(text_results, all_chunks, seen_ids, "text")
+            text_query = """
+                SELECT *, vector::distance::cosine(embedding, $query_vec) AS distance 
+                FROM text_chunk 
+                WHERE course_code = $course 
+                AND embedding <| $k, MTREE |> $query_vec
+            """
+            params = {"query_vec": query_embedding, "course": course_code, "k": k}
+            if topic:
+                text_query += " AND topic = $topic"
+                params["topic"] = topic
+            
+            res = await db.query(text_query, params)
+            if res and res[0]["result"]:
+                for row in res[0]["result"]:
+                    row["chunk_id"] = str(row["id"])
+                    all_chunks.append(row)
+                    seen_ids.add(row["id"])
 
-        # 2. Keyword Search (Text) - Simple fallback for better recall on specific terms
-        # Only do this if we have few results or for text
+        # 2. Keyword Search Fallback (Text)
         if (content_type is None or content_type == "text") and len(query.split()) < 10:
-            # We take the first 3 words of the query as keywords
             keywords = [w.lower() for w in query.split() if len(w) > 3][:3]
             for kw in keywords:
-                kw_results = self.text_collection.get(
-                    where={"$and": [where_filter, {"course_code": course_code}]},
-                    where_document={"$contains": kw},
-                    limit=5,
-                    include=["documents", "metadatas"],
-                )
-                if kw_results and kw_results["ids"]:
-                    # Convert GET results format to match QUERY results format for processing
-                    formatted_kw = {
-                        "ids": [kw_results["ids"]],
-                        "documents": [kw_results["documents"]],
-                        "metadatas": [kw_results["metadatas"]],
-                        "distances": [[0.1] * len(kw_results["ids"])] # Artificial distance for keyword matches
-                    }
-                    self._process_results(formatted_kw, all_chunks, seen_ids, "text")
+                kw_query = "SELECT * FROM text_chunk WHERE course_code = $course AND text CONTAINS $kw LIMIT 5"
+                res = await db.query(kw_query, {"course": course_code, "kw": kw})
+                if res and res[0]["result"]:
+                    for row in res[0]["result"]:
+                        if row["id"] not in seen_ids:
+                            row["chunk_id"] = str(row["id"])
+                            row["distance"] = 0.1 # Artificial
+                            all_chunks.append(row)
+                            seen_ids.add(row["id"])
 
         # 3. Vector Search (Image)
         if content_type is None or content_type == "image":
-            image_results = self.image_collection.query(
-                query_embeddings=[query_embedding],
-                n_results=k,
-                where=where_filter,
-                include=["documents", "metadatas", "distances"],
-            )
-            self._process_results(image_results, all_chunks, seen_ids, "image")
+            img_query = """
+                SELECT *, vector::distance::cosine(embedding, $query_vec) AS distance 
+                FROM image_chunk 
+                WHERE course_code = $course 
+                AND embedding <| $k, MTREE |> $query_vec
+            """
+            res = await db.query(img_query, {"query_vec": query_embedding, "course": course_code, "k": k})
+            if res and res[0]["result"]:
+                for row in res[0]["result"]:
+                    row["chunk_id"] = str(row["id"])
+                    all_chunks.append(row)
 
-        all_chunks.sort(key=lambda x: x["distance"])
+        all_chunks.sort(key=lambda x: x.get("distance", 1.0))
+        return all_chunks[: k * 2] if content_type is None else all_chunks[:k]
 
-        if content_type is None and len(all_chunks) > k * 2:
-            all_chunks = all_chunks[: k * 2]
-
-        return all_chunks
-
-    def _process_results(self, results, all_chunks, seen_ids, default_type):
-        if results and results["ids"] and results["ids"][0]:
-            for i in range(len(results["ids"][0])):
-                chunk_id = results["ids"][0][i]
-                if chunk_id in seen_ids:
-                    continue
-                seen_ids.add(chunk_id)
-                meta = results["metadatas"][0][i] if results["metadatas"] else {}
-                all_chunks.append({
-                    "chunk_id": chunk_id,
-                    "text": results["documents"][0][i] if results["documents"] else "",
-                    "source_title": meta.get("source_title", "Unknown"),
-                    "page": meta.get("page", 1),
-                    "topic": meta.get("topic", ""),
-                    "content_type": meta.get("content_type", default_type),
-                    "distance": results["distances"][0][i] if results["distances"] else 0.5,
-                })
-
-    def count_chunks(self, course_code: str) -> int:
-        text_count = 0
-        img_count = 0
-
-        text_data = self.text_collection.get(where={"course_code": course_code}, include=[])
-        text_count = len(text_data.get("ids", [])) if text_data else 0
-
-        img_data = self.image_collection.get(where={"course_code": course_code}, include=[])
-        img_count = len(img_data.get("ids", [])) if img_data else 0
-
-        return text_count + img_count
-
-    def delete_course(self, course_code: str) -> int:
-        deleted = 0
-        for coll in [self.text_collection, self.image_collection]:
-            results = coll.get(where={"course_code": course_code})
-            ids_to_delete = results.get("ids", []) if results else []
-            if ids_to_delete:
-                coll.delete(ids=ids_to_delete)
-                deleted += len(ids_to_delete)
-        return deleted
-
-    def list_courses(self) -> list[str]:
-        course_codes: set[str] = set()
-        for coll in [self.text_collection, self.image_collection]:
-            all_data = coll.get(include=["metadatas"])
-            for meta in (all_data.get("metadatas") or []):
-                cc = meta.get("course_code", "") if meta else ""
-                if cc:
-                    course_codes.add(cc)
-        return sorted(list(course_codes))
-
-    def get_course_stats(self, course_code: str) -> dict[str, Any]:
-        topic_counts: dict[str, int] = {}
-        doc_counts: dict[str, int] = {}
-        image_chunks = 0
-        text_chunks = 0
-
-        for coll in [self.text_collection, self.image_collection]:
-            all_data = coll.get(where={"course_code": course_code}, include=["metadatas"])
-            for meta in (all_data.get("metadatas", []) or []):
-                if not meta: continue
-                
-                t = meta.get("topic", "")
-                if t:
-                    topic_counts[t] = topic_counts.get(t, 0) + 1
-                
-                d = meta.get("source_title", "Unknown")
-                doc_counts[d] = doc_counts.get(d, 0) + 1
-                
-                ct = meta.get("content_type", "text")
-                if ct == "image":
-                    image_chunks += 1
-                else:
-                    text_chunks += 1
-
+    async def get_course_stats(self, course_code: str) -> dict[str, Any]:
+        db = await get_db()
+        
+        # Count chunks
+        text_count_res = await db.query("SELECT count() FROM text_chunk WHERE course_code = $code GROUP ALL", {"code": course_code})
+        img_count_res = await db.query("SELECT count() FROM image_chunk WHERE course_code = $code GROUP ALL", {"code": course_code})
+        
+        text_chunks = text_count_res[0]["result"][0]["count"] if text_count_res and text_count_res[0]["result"] else 0
+        image_chunks = img_count_res[0]["result"][0]["count"] if img_count_res and img_count_res[0]["result"] else 0
+        
+        # Topics and documents
+        topics_res = await db.query("SELECT topic, count() as count FROM (SELECT topic FROM text_chunk WHERE course_code = $code) GROUP BY topic", {"code": course_code})
+        docs_res = await db.query("SELECT source_title, count() as count FROM (SELECT source_title FROM text_chunk WHERE course_code = $code UNION SELECT source_title FROM image_chunk WHERE course_code = $code) GROUP BY source_title", {"code": course_code})
+        
         return {
             "course_code": course_code,
             "total_chunks": text_chunks + image_chunks,
             "text_chunks": text_chunks,
             "image_chunks": image_chunks,
-            "topics": [
-                {"topic": t, "chunks": c}
-                for t, c in sorted(topic_counts.items(), key=lambda x: -x[1])
-            ],
-            "documents": [
-                {"name": d, "chunks": c}
-                for d, c in sorted(doc_counts.items(), key=lambda x: -x[1])
-            ],
+            "topics": [{"topic": r["topic"], "chunks": r["count"]} for r in (topics_res[0]["result"] if topics_res else []) if r["topic"]],
+            "documents": [{"name": r["source_title"], "chunks": r["count"]} for r in (docs_res[0]["result"] if docs_res else [])],
         }
+
+    async def delete_course(self, course_code: str) -> int:
+        db = await get_db()
+        res1 = await db.query("DELETE text_chunk WHERE course_code = $code", {"code": course_code})
+        res2 = await db.query("DELETE image_chunk WHERE course_code = $code", {"code": course_code})
+        return len(res1[0]["result"] if res1 else []) + len(res2[0]["result"] if res2 else [])
