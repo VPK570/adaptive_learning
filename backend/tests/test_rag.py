@@ -148,7 +148,7 @@ async def test_ingest_text_chunks():
     from app.rag import RAGPipeline
 
     rag = RAGPipeline()
-    rag.delete_course("BAECE102")
+    await rag.delete_course("BAECE102")
 
     result = await rag.ingest(
         course_code="BAECE102",
@@ -167,7 +167,7 @@ async def test_retrieve_returns_chunks():
     from app.rag import RAGPipeline
 
     rag = RAGPipeline()
-    rag.delete_course("BAECE102")
+    await rag.delete_course("BAECE102")
 
     await rag.ingest(
         course_code="BAECE102",
@@ -185,7 +185,7 @@ async def test_stats_includes_content_types():
     from app.rag import RAGPipeline
 
     rag = RAGPipeline()
-    rag.delete_course("BAECE102")
+    await rag.delete_course("BAECE102")
 
     await rag.ingest(
         course_code="BAECE102",
@@ -194,7 +194,7 @@ async def test_stats_includes_content_types():
         topic="test",
     )
 
-    stats = rag.get_course_stats("BAECE102")
+    stats = await rag.get_course_stats("BAECE102")
     assert stats["total_chunks"] >= 1
     assert stats["text_chunks"] >= 1
     assert "image_chunks" in stats
@@ -205,17 +205,17 @@ async def test_count_and_list_courses():
     from app.rag import RAGPipeline
 
     rag = RAGPipeline()
-    rag.delete_course("BAECE102_TEST")
+    await rag.delete_course("BAECE102_TEST")
 
     await rag.ingest("BAECE102_TEST", "Test", "Some content.", "test")
 
-    count = rag.count_chunks("BAECE102_TEST")
+    count = await rag.count_chunks("BAECE102_TEST")
     assert count >= 1
 
-    courses = rag.list_courses()
+    courses = await rag.list_courses()
     assert "BAECE102_TEST" in courses
 
-    rag.delete_course("BAECE102_TEST")
+    await rag.delete_course("BAECE102_TEST")
 
 
 if __name__ == "__main__":

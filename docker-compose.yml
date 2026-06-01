@@ -1,12 +1,50 @@
 version: "3.9"
 
 services:
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    command: start --user root --pass root surrealkv:/data/adaptive_learning.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - surreal_data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - SURREAL_URL=ws://surrealdb:8000/rpc
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - BASE_STORAGE_DIR=/app/storage
+      - CHROMA_PATH=/app/chroma_db
+    depends_on:
+      - surrealdb
+    volumes:
+      - ./backend/storage:/app/storage
+      - ./chroma_db:/app/chroma_db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+    depends_on:
+      - backend
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: adaptive_learning
+      - POSTGRES_DB=adaptive_learning
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
       - "5432:5432"
     volumes:
@@ -21,5 +59,6 @@ services:
     command: redis-server --appendonly yes
 
 volumes:
+  surreal_data:
   postgres_data:
   redis_data:
