@@ -238,7 +238,7 @@ class RAGPipeline:
 
         # 2. Vector Search (Image)
         if content_type is None or content_type == "image":
-            query_embedding = await client.embed_text(query)
+            query_embedding = await client.embed_image(query)
             img_query = f"""
                 SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM image_chunk 
