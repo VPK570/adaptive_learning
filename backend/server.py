@@ -478,10 +478,12 @@ async def get_saved_flashcards(course: str = Query(...)):
 
 @app.delete("/flashcards/saved/{set_id}")
 async def delete_saved_flashcards(set_id: str):
-    set_id = sanitize_id(set_id)
-    if not await saved_content.delete_flashcards(set_id):
-        raise HTTPException(404, "Flashcard set not found.")
-    return {"status": "success"}
+    try:
+        if not await saved_content.delete_flashcards(set_id):
+            raise HTTPException(404, "Flashcard set not found.")
+        return {"status": "success"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 @app.post("/quiz")
 async def generate_quiz(body: QuizRequest):
@@ -530,10 +532,12 @@ async def get_saved_quizzes(course: str = Query(...)):
 
 @app.delete("/quiz/saved/{quiz_id}")
 async def delete_saved_quiz(quiz_id: str):
-    quiz_id = sanitize_id(quiz_id)
-    if not await saved_content.delete_quiz(quiz_id):
-        raise HTTPException(404, "Quiz not found.")
-    return {"status": "success"}
+    try:
+        if not await saved_content.delete_quiz(quiz_id):
+            raise HTTPException(404, "Quiz not found.")
+        return {"status": "success"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/chunks")
