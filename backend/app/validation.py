@@ -17,7 +17,16 @@ MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB limit
 SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 def sanitize_id(id_str: str) -> str:
-    """Removes any characters that are not alphanumeric, underscores, or hyphens."""
+    """
+    Sanitizes a string to be used as an identifier (e.g., session ID, course code).
+    
+    Rules:
+    1. If empty, returns "default".
+    2. Replaces any character not alphanumeric, underscore, or hyphen with an underscore.
+    3. If the result starts with a dot or underscore, prepends "id_" to prevent issues 
+       with hidden files or certain database naming conventions.
+    4. Truncates to MAX_SESSION_ID_LENGTH (50).
+    """
     if not id_str:
         return "default"
     # Replace anything not in the pattern with an underscore
@@ -26,6 +35,25 @@ def sanitize_id(id_str: str) -> str:
     if sanitized.startswith(".") or sanitized.startswith("_"):
         sanitized = "id_" + sanitized
     return sanitized[:MAX_SESSION_ID_LENGTH]
+
+def validate_id(id_str: str) -> bool:
+    """
+    Validates that an ID string is safe and follows expected patterns.
+    Returns True if valid, raises ValueError with a clear message if not.
+    """
+    if not id_str:
+        raise ValueError("ID cannot be empty")
+    
+    if len(id_str) > MAX_SESSION_ID_LENGTH:
+        raise ValueError(f"ID exceeds maximum length of {MAX_SESSION_ID_LENGTH}")
+    
+    if id_str.startswith(".") or id_str.startswith("_"):
+         raise ValueError("ID cannot start with a dot or underscore.")
+
+    if not SAFE_ID_PATTERN.match(id_str):
+        raise ValueError("ID contains invalid characters. Only alphanumeric, underscores, and hyphens are allowed.")
+         
+    return True
 
 def validate_course_code(course_code: str) -> str:
     """Validates and sanitizes course code."""
