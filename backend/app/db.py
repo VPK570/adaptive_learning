@@ -30,9 +30,27 @@ class SurrealDBManager:
         await db.query("""
             DEFINE TABLE text_chunk SCHEMAFULL;
             DEFINE FIELD course_code ON TABLE text_chunk TYPE string;
+            DEFINE FIELD text ON TABLE text_chunk TYPE string;
+            DEFINE FIELD embedding ON TABLE text_chunk TYPE array<float>;
+            DEFINE FIELD source_title ON TABLE text_chunk TYPE string;
+            DEFINE FIELD topic ON TABLE text_chunk TYPE string;
+            DEFINE FIELD page ON TABLE text_chunk TYPE number;
+            DEFINE FIELD content_type ON TABLE text_chunk TYPE string;
             
+            -- Full-Text Search Index
+            DEFINE ANALYZER chunk_analyzer TOKENIZERS blank,punct FILTERS lowercase,snowball(english);
+            DEFINE INDEX text_search_idx ON TABLE text_chunk FIELDS text FULLTEXT ANALYZER chunk_analyzer BM25;
+
             DEFINE TABLE image_chunk SCHEMAFULL;
             DEFINE FIELD course_code ON TABLE image_chunk TYPE string;
+            DEFINE FIELD text ON TABLE image_chunk TYPE string;
+            DEFINE FIELD embedding ON TABLE image_chunk TYPE array<float>;
+            DEFINE FIELD source_title ON TABLE image_chunk TYPE string;
+            DEFINE FIELD topic ON TABLE image_chunk TYPE string;
+            DEFINE FIELD page ON TABLE image_chunk TYPE number;
+            DEFINE FIELD content_type ON TABLE image_chunk TYPE string;
+            DEFINE FIELD mime_type ON TABLE image_chunk TYPE string;
+            DEFINE FIELD image_size_kb ON TABLE image_chunk TYPE number;
             
             DEFINE TABLE curriculum_chunk SCHEMAFULL;
             DEFINE FIELD course_code ON TABLE curriculum_chunk TYPE string;

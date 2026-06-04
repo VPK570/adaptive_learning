@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH, sanitize_id
+from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH, sanitize_id, validate_id
 from app.db import get_db
 
 class SavedContentManager:
@@ -33,10 +33,11 @@ class SavedContentManager:
         return []
 
     async def delete_flashcards(self, set_id):
+        # If it's a full record ID like "flashcard_set:id", extract the id part for validation
+        id_part = set_id.split(":")[-1] if ":" in set_id else set_id
+        validate_id(id_part)
+        
         db = await get_db()
-        # Ensure set_id is correctly formatted for SurrealDB record ID if needed, 
-        # or just use it as string if it was returned as such.
-        # SurrealDB IDs are like flashcard_set:id
         if ":" not in set_id:
             set_id = f"flashcard_set:{set_id}"
             
@@ -75,6 +76,9 @@ class SavedContentManager:
         return []
 
     async def delete_quiz(self, quiz_id):
+        id_part = quiz_id.split(":")[-1] if ":" in quiz_id else quiz_id
+        validate_id(id_part)
+        
         db = await get_db()
         if ":" not in quiz_id:
             quiz_id = f"quiz:{quiz_id}"
