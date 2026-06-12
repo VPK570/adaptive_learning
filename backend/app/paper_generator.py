@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List
 from app.openrouter import client
 
 async def generate_paper(course_code: str, total_marks: int, difficulty: str, topics: List[str], chunks: List[dict]):
