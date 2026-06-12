@@ -1,4 +1,3 @@
-import uuid
 from typing import Any
 from app.config import settings
 from app.chunker import chunk_text, clean_text
@@ -184,7 +183,7 @@ class RAGPipeline:
                 SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM text_chunk 
                 WHERE course_code = $course 
-                AND embedding <| {k}, COSINE |> $query_vec
+                AND embedding <|{k}, 40|> $query_vec
             """
             v_params = {"query_vec": query_embedding, "course": course_code}
             if topic:
@@ -238,12 +237,12 @@ class RAGPipeline:
 
         # 2. Vector Search (Image)
         if content_type is None or content_type == "image":
-            query_embedding = await client.embed_text(query)
+            query_embedding = await client.embed_image(query)
             img_query = f"""
                 SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM image_chunk 
                 WHERE course_code = $course 
-                AND embedding <| {k}, COSINE |> $query_vec
+                AND embedding <|{k}, 40|> $query_vec
             """
             image_hits = await db.query(img_query, {"query_vec": query_embedding, "course": course_code})
             if isinstance(image_hits, list):
@@ -300,7 +299,7 @@ class RAGPipeline:
         db = await get_db()
         res1 = await db.query("DELETE text_chunk WHERE course_code = $code", {"code": course_code})
         res2 = await db.query("DELETE image_chunk WHERE course_code = $code", {"code": course_code})
-        return len(res1[0]["result"] if res1 else []) + len(res2[0]["result"] if res2 else [])
+        return len(res1 if res1 else []) + len(res2 if res2 else [])
 
     async def count_chunks(self, course_code: str) -> int:
         stats = await self.get_course_stats(course_code)

@@ -7,7 +7,6 @@ Supports:
 """
 
 import os
-import base64
 from typing import Any
 
 import httpx
@@ -179,6 +178,34 @@ class OpenRouterClient:
             if "data" not in data:
                 raise ValueError(f"No 'data' in response: {str(data)[:200]}")
             return [item["embedding"] for item in data["data"]]
+
+    async def embed_image(self, text: str) -> list[float]:
+        """
+        Embed a single text query for image search.
+        Uses the multimodal format to ensure 1024-dim embeddings match stored image vectors.
+        """
+        inputs = [{"content": [{"type": "text", "text": text}]}]
+        async with httpx.AsyncClient(timeout=30) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/embeddings",
+                    headers=self._headers(),
+                    json={
+                        "model": self.embedding_model,
+                        "input": inputs,
+                    },
+                )
+            except httpx.HTTPStatusError as e:
+                print(f"[embed_image] HTTP {e.response.status_code}: {e.response.text[:300]}")
+                raise
+            
+            if not response.is_success:
+                raise ValueError(f"embed_image failed: {response.text[:200]}")
+            
+            data = response.json()
+            if "data" not in data:
+                raise ValueError(f"Missing 'data' key: {str(data)[:200]}")
+            return data["data"][0]["embedding"]
 
     async def chat(
         self,

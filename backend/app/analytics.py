@@ -39,7 +39,7 @@ async def get_unanswered_questions(course_code: str):
         "SELECT * FROM query_log WHERE course_code = $code AND out_of_scope = true",
         {"code": course_code}
     )
-    return res[0]["result"] if res and res[0]["result"] else []
+    return res if res else []
 
 
 async def get_coverage(course_code: str):
@@ -51,8 +51,8 @@ async def get_coverage(course_code: str):
     )
     
     doc_hits = {}
-    if res and res[0]["result"]:
-        for log in res[0]["result"]:
+    if res:
+        for log in res:
             for src in log.get("cited_sources", []):
                 title = src.get("source_title") if isinstance(src, dict) else str(src)
                 if title:
@@ -65,11 +65,11 @@ async def get_analytics(course_code: str):
     db = await get_db()
     
     logs_res = await db.query("SELECT * FROM query_log WHERE course_code = $code", {"code": course_code})
-    course_logs = logs_res[0]["result"] if logs_res and logs_res[0]["result"] else []
+    course_logs = logs_res if logs_res else []
 
     # Get topics from curriculum chunks
     topics_res = await db.query("SELECT topic FROM (SELECT topic FROM text_chunk WHERE course_code = $code) GROUP BY topic", {"code": course_code})
-    curriculum_topics = [r["topic"] for r in (topics_res[0]["result"] if topics_res else []) if r["topic"]]
+    curriculum_topics = [r["topic"] for r in (topics_res if topics_res else []) if r.get("topic")]
 
     topic_hits = {}
     for topic in curriculum_topics:
@@ -100,4 +100,4 @@ async def get_all_questions(course_code: str):
     course_code = validate_course_code(course_code)
     db = await get_db()
     res = await db.query("SELECT * FROM query_log WHERE course_code = $code", {"code": course_code})
-    return res[0]["result"] if res and res[0]["result"] else []
+    return res if res else []
