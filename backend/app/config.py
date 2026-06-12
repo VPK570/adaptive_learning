@@ -16,8 +16,6 @@ class Settings:
     SURREAL_USER: str = os.getenv("SURREAL_USER", "root")
     SURREAL_PASS: str = os.getenv("SURREAL_PASS", "root")
 
-    CHROMA_PATH: str = os.getenv("CHROMA_PATH", "./chroma_db")
-
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_BASE_URL: str = os.getenv(
         "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
@@ -30,14 +28,6 @@ class Settings:
     CHUNK_OVERLAP_TOKENS: int = int(os.getenv("CHUNK_OVERLAP_TOKENS", "64"))
     IMAGE_MAX_BATCH_SIZE: int = int(os.getenv("IMAGE_MAX_BATCH_SIZE", "5"))
     IMAGE_MAX_PER_PDF: int = int(os.getenv("IMAGE_MAX_PER_PDF", "50"))
-
-    # Storage paths
-    BASE_STORAGE_DIR: str = os.getenv("BASE_STORAGE_DIR", "./backend/storage")
-    CHAT_HISTORY_DIR: str = os.path.join(BASE_STORAGE_DIR, "chat_history")
-    FLASHCARDS_DIR: str = os.path.join(BASE_STORAGE_DIR, "flashcards")
-    QUIZZES_DIR: str = os.path.join(BASE_STORAGE_DIR, "quizzes")
-    ANALYTICS_DIR: str = os.path.join(BASE_STORAGE_DIR, "analytics")
-    UPLOADS_DIR: str = os.path.join(BASE_STORAGE_DIR, "uploads")
 
 
 settings = get_settings()
