@@ -2,8 +2,9 @@ version: "3.9"
 
 services:
   surrealdb:
+    container_name: surrealdb
     image: surrealdb/surrealdb:latest
-    command: start --user root --pass root surrealkv:/data/adaptive_learning.db
+    command: start --user root --pass root memory
     ports:
       - "8000:8000"
     volumes:
@@ -19,7 +20,10 @@ services:
       - SURREAL_URL=ws://surrealdb:8000/rpc
       - SURREAL_USER=root
       - SURREAL_PASS=root
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - SURREAL_NS=adaptive_learning
+      - SURREAL_DB=learning_platform
+      - OPENROUTER_API_KEY=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
+
       - BASE_STORAGE_DIR=/app/storage
       - CHROMA_PATH=/app/chroma_db
     depends_on:
@@ -50,15 +54,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
+
 
 volumes:
   surreal_data:
   postgres_data:
-  redis_data:

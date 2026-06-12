@@ -1,8 +1,8 @@
-from typing import Any, Tuple
+from typing import Tuple
 from app.openrouter import client
 
 class Verifier:
-    def __init__(self, model: str = "google/gemma-2-9b-it:free"):
+    def __init__(self, model: str | None = None):
         self.model = model
 
     async def verify_answer(

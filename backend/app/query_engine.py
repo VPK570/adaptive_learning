@@ -3,18 +3,14 @@
 Handles both text and image chunks in the context window.
 """
 
-import re
 from typing import AsyncGenerator, Dict, Any
 
 from app.openrouter import client
 from app.citation import validate_citations, remove_uncited_claims, extract_all_citations, parse_citation
-from app.curriculum import CurriculumManager
 from app.gatekeeper import gatekeeper
 from app.verifier import verifier
 from app.rag import RAGPipeline
 
-curriculum_manager = CurriculumManager()
-rag_pipeline = RAGPipeline()
 
 def build_tutor_system_prompt(
     course_name: str,
@@ -22,7 +18,6 @@ def build_tutor_system_prompt(
     language: str = "English",
     mastery: float | None = None,
 ) -> str:
-# ... (rest of build_tutor_system_prompt remains the same)
     mastery_section = ""
     if mastery is not None:
         if mastery >= 0.70:
@@ -62,7 +57,6 @@ def build_context_window(
     history: list[dict],
     max_turns: int = 8,
 ) -> str:
-# ... (rest of build_context_window remains the same)
     parts = ["COURSE MATERIALS:"]
 
     text_chunks = [c for c in chunks if c.get("content_type", "text") != "image"]
@@ -73,15 +67,9 @@ def build_context_window(
     for i, c in enumerate(text_chunks, 1):
         title = c.get("source_title", "Unknown")
         page = c.get("page", "?")
-        content_type = c.get("content_type", "text")
         text = c.get("text", "")
 
-        header = (
-            f"<Text {i}: {title}, Slide {page}>"
-            if content_type == "text"
-            else f"<Document {i}: {title}, Slide {page}>"
-        )
-        parts.append(f"{header}\n{text}\n</Text {i}>")
+        parts.append(f"<Text {i}: {title}, Slide {page}>\n{text}\n</Text {i}>")
         available_citations.append(f"[Source: {title}, Slide {page}]")
 
     if image_chunks:
@@ -122,7 +110,6 @@ def build_tutor_prompt(
     language: str = "English",
     mastery: float | None = None,
 ) -> list[dict[str, str]]:
-# ... (rest of build_tutor_prompt remains the same)
     system = build_tutor_system_prompt(course_name, course_code, language, mastery)
     context = build_context_window(chunks, history or [])
 
@@ -133,8 +120,18 @@ def build_tutor_prompt(
 
 
 class QueryEngine:
+    def __init__(self):
+        self._rag_pipeline: RAGPipeline | None = None
+        self._rag = None
+
+    @property
+    def rag_pipeline(self) -> RAGPipeline:
+        if self._rag_pipeline is None:
+            self._rag_pipeline = RAGPipeline()
+        return self._rag_pipeline
+
     async def _get_gatekeeper_context(self, course_code: str) -> tuple[list[str], str]:
-        stats = await rag_pipeline.get_course_stats(course_code)
+        stats = await self.rag_pipeline.get_course_stats(course_code)
         doc_titles = [d["name"] for d in stats.get("documents", [])]
         
         from app.db import get_db
@@ -143,7 +140,7 @@ class QueryEngine:
             "SELECT text FROM curriculum_chunk WHERE course_code = $code",
             {"code": course_code}
         )
-        curriculum_text = "\n".join([r["text"] for r in (curr_res[0]["result"] if curr_res else [])])
+        curriculum_text = "\n".join([r["text"] for r in (curr_res if curr_res else [])])
         
         return doc_titles, curriculum_text
 
@@ -157,7 +154,6 @@ class QueryEngine:
         mastery: float | None = None,
         top_k: int = 5,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        # 1. Gatekeeper Check & Enrichment
         doc_titles, curriculum_text = await self._get_gatekeeper_context(course_code)
         is_relevant, enriched_query, refusal = await gatekeeper.check_and_enrich(
             query, course_code, doc_titles, curriculum_text
@@ -168,8 +164,7 @@ class QueryEngine:
             yield {"type": "metadata", "out_of_scope": True, "cited_sources": []}
             return
 
-        # 2. Retrieval with Enriched Query
-        chunks = await rag_pipeline.retrieve(
+        chunks = await self.rag_pipeline.retrieve(
             query=enriched_query,
             course_code=course_code,
             top_k=top_k,
@@ -177,11 +172,9 @@ class QueryEngine:
 
         if not chunks:
             yield {"type": "content", "content": "I couldn't find specific information in the course materials, but I can try to help based on the curriculum."}
-            # Fallback or strict refusal? For now, proceed with empty chunks if gatekeeper said yes
-            # but usually we want at least some context.
             
         messages = build_tutor_prompt(
-            query=query, # Use original query for the LLM to answer
+            query=query,
             course_code=course_code,
             course_name=course_name,
             chunks=chunks,
@@ -190,7 +183,6 @@ class QueryEngine:
             mastery=mastery,
         )
 
-        # Strategy
         strategy_prompt = messages + [
             {"role": "user", "content": "Briefly outline your strategy for answering this student's question based on the provided materials. Keep it to 2-3 sentences."}
         ]
@@ -204,7 +196,6 @@ class QueryEngine:
                 full_response += chunk["content"]
             yield chunk
 
-        # After streaming: Verifier check (simplified for stream)
         is_valid, reason = await verifier.verify_answer(query, full_response, chunks, course_code)
         if not is_valid:
             yield {"type": "content", "content": f"\n\n⚠️ *Note: This answer may contain information not explicitly in your notes. Reason: {reason}*"}
@@ -214,12 +205,14 @@ class QueryEngine:
         seen_keys = set()
         for cit in citations:
             c_title, c_page = parse_citation(cit)
-            if not c_title or not c_page: continue
+            if not c_title or not c_page:
+                continue
             for c in chunks:
                 v_title = c.get("source_title", "").lower()
                 v_page = str(c.get("page", ""))
                 key = (v_title, v_page)
-                if key in seen_keys: continue
+                if key in seen_keys:
+                    continue
                 if v_page == c_page and (v_title in c_title or c_title in v_title):
                     actually_cited.append({
                         "source_title": c.get("source_title", ""),
@@ -247,7 +240,6 @@ class QueryEngine:
         mastery: float | None = None,
         top_k: int = 5,
     ) -> dict:
-        # 1. Gatekeeper
         doc_titles, curriculum_text = await self._get_gatekeeper_context(course_code)
         is_relevant, enriched_query, refusal = await gatekeeper.check_and_enrich(
             query, course_code, doc_titles, curriculum_text
@@ -261,8 +253,7 @@ class QueryEngine:
                 "chunks_retrieved": 0,
             }
 
-        # 2. Retrieval
-        chunks = await rag_pipeline.retrieve(
+        chunks = await self.rag_pipeline.retrieve(
             query=enriched_query,
             course_code=course_code,
             top_k=top_k,
@@ -280,10 +271,8 @@ class QueryEngine:
 
         response_text = await client.chat(messages, temperature=0.3, max_tokens=1024)
         
-        # 3. Verifier
         is_valid, reason = await verifier.verify_answer(query, response_text, chunks, course_code)
         if not is_valid:
-            # Optionally retry or just flag
             response_text += f"\n\n[Verification Note: {reason}]"
 
         citation_check = validate_citations(response_text, chunks)
@@ -291,16 +280,18 @@ class QueryEngine:
             response_text = remove_uncited_claims(response_text)
 
         citations = extract_all_citations(response_text)
-        actually_cited = [] # ... same logic as stream
+        actually_cited = []
         seen_keys = set()
         for cit in citations:
             c_title, c_page = parse_citation(cit)
-            if not c_title or not c_page: continue
+            if not c_title or not c_page:
+                continue
             for c in chunks:
                 v_title = c.get("source_title", "").lower()
                 v_page = str(c.get("page", ""))
                 key = (v_title, v_page)
-                if key in seen_keys: continue
+                if key in seen_keys:
+                    continue
                 if v_page == c_page and (v_title in c_title or c_title in v_title):
                     actually_cited.append({
                         "source_title": c.get("source_title", ""),

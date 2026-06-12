@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH, sanitize_id, validate_id
+from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH, validate_id
 from app.db import get_db
 
 class SavedContentManager:

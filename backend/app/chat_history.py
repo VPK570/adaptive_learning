@@ -8,13 +8,11 @@ async def get_course_history(course_code, session_id):
     
     db = await get_db()
     res = await db.query(
-        "SELECT * FROM chat_history WHERE course_code = $course AND session_id = $session ORDER BY timestamp ASC",
-        {"course": course_code, "session": session_id}
+        "SELECT * FROM chat_history WHERE course_code = $course AND session_id = $session_id ORDER BY timestamp ASC",
+        {"course": course_code, "session_id": session_id}
     )
     
-    if res and res[0]["result"]:
-        return res[0]["result"]
-    return []
+    return res if res else []
 
 async def add_message(course_code, session_id, role, content):
     course_code = validate_course_code(course_code)
@@ -36,6 +34,6 @@ async def clear_course_history(course_code, session_id):
     
     db = await get_db()
     await db.query(
-        "DELETE chat_history WHERE course_code = $course AND session_id = $session",
-        {"course": course_code, "session": session_id}
+        "DELETE chat_history WHERE course_code = $course AND session_id = $session_id",
+        {"course": course_code, "session_id": session_id}
     )
