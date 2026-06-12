@@ -1,9 +1,8 @@
-import json
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 from app.openrouter import client
 
 class Gatekeeper:
-    def __init__(self, model: str = "google/gemma-2-9b-it:free"):
+    def __init__(self, model: str | None = None):
         self.model = model
 
     async def check_and_enrich(

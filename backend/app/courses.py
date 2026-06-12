@@ -11,7 +11,7 @@ from app.db import get_db
 async def get_all_courses_data() -> List[Dict[str, Any]]:
     db = await get_db()
     result = await db.query("SELECT * FROM course ORDER BY created_at DESC")
-    return result[0]["result"] if result and "result" in result[0] else []
+    return result if isinstance(result, list) else []
 
 async def create_course(course_code: str, course_name: str, description: str, icon: str = "📚") -> Dict[str, Any]:
     course_code = validate_course_code(course_code)
@@ -23,7 +23,7 @@ async def create_course(course_code: str, course_name: str, description: str, ic
     
     # Check if course already exists
     existing = await db.query("SELECT * FROM course WHERE course_code = $code", {"code": course_code})
-    if existing and existing[0]["result"]:
+    if existing and isinstance(existing, list) and len(existing) > 0 and "result" in existing[0] and existing[0]["result"]:
         raise ValueError(f"Course with code {course_code} already exists")
     
     new_course = {

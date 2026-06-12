@@ -15,11 +15,10 @@ import io
 import base64
 import logging
 from dataclasses import dataclass
-from typing import Generator
-
-logger = logging.getLogger(__name__)
 
 import pypdf
+
+logger = logging.getLogger(__name__)
 
 JPEG_MAGIC = b"\xFF\xD8\xFF"
 PNG_MAGIC = b"\x89\x50\x4E\x47"
@@ -67,39 +66,43 @@ class PageContent:
     images: list[ImageContent]
 
 
+def _extract_page_images(page) -> list[ImageContent]:
+    """Extract valid images from a single PDF page."""
+    images: list[ImageContent] = []
+    try:
+        resources = page.get("/Resources", {})
+        xobjects = resources.get("/XObject", {})
+
+        if isinstance(xobjects, dict):
+            for key, xobj_ref in xobjects.items():
+                xobj = xobj_ref.get_object()
+
+                if xobj.get("/Subtype") == "/Image":
+                    try:
+                        data = xobj.get_data()
+                        if isinstance(data, bytes) and len(data) > 1000:
+                            mime = detect_mime(data)
+                            if mime:
+                                images.append(ImageContent(
+                                    b64_str=base64.b64encode(data).decode("utf-8"),
+                                    mime_type=mime,
+                                    valid=True,
+                                    bytes_size=len(data),
+                                ))
+                    except Exception as e:
+                        logger.warning(f"Failed to extract image {key} on page {page.page_number}: {e}")
+    except Exception as e:
+        logger.warning(f"Failed to process resources on page {page.page_number}: {e}")
+    return images
+
+
 async def extract_all_pages(filepath: str) -> list[PageContent]:
     reader = pypdf.PdfReader(filepath)
     pages: list[PageContent] = []
 
     for i, page in enumerate(reader.pages, 1):
         text = page.extract_text() or ""
-        images: list[ImageContent] = []
-
-        try:
-            resources = page.get("/Resources", {})
-            xobjects = resources.get("/XObject", {})
-
-            if isinstance(xobjects, dict):
-                for key, xobj_ref in xobjects.items():
-                    xobj = xobj_ref.get_object()
-
-                    if xobj.get("/Subtype") == "/Image":
-                        try:
-                            data = xobj.get_data()
-                            if isinstance(data, bytes) and len(data) > 1000:
-                                mime = detect_mime(data)
-                                if mime:
-                                    images.append(ImageContent(
-                                        b64_str=base64.b64encode(data).decode("utf-8"),
-                                        mime_type=mime,
-                                        valid=True,
-                                        bytes_size=len(data),
-                                    ))
-                        except Exception as e:
-                            logger.warning(f"Failed to extract image {key} on page {i}: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to process resources on page {i}: {e}")
-
+        images = _extract_page_images(page)
         pages.append(PageContent(page_num=i, text=text, images=images))
 
     return pages
@@ -111,80 +114,7 @@ async def extract_all_pages_from_bytes(pdf_bytes: bytes) -> list[PageContent]:
 
     for i, page in enumerate(reader.pages, 1):
         text = page.extract_text() or ""
-        images: list[ImageContent] = []
-
-        try:
-            resources = page.get("/Resources", {})
-            xobjects = resources.get("/XObject", {})
-
-            if isinstance(xobjects, dict):
-                for key, xobj_ref in xobjects.items():
-                    xobj = xobj_ref.get_object()
-
-                    if xobj.get("/Subtype") == "/Image":
-                        try:
-                            data = xobj.get_data()
-                            if isinstance(data, bytes) and len(data) > 1000:
-                                mime = detect_mime(data)
-                                if mime:
-                                    images.append(ImageContent(
-                                        b64_str=base64.b64encode(data).decode("utf-8"),
-                                        mime_type=mime,
-                                        valid=True,
-                                        bytes_size=len(data),
-                                    ))
-                        except Exception as e:
-                            logger.warning(f"Failed to extract image {key} on page {i}: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to process resources on page {i}: {e}")
-
+        images = _extract_page_images(page)
         pages.append(PageContent(page_num=i, text=text, images=images))
 
     return pages
-
-
-def page_to_text_for_chunking(page: PageContent) -> str:
-    parts = [f"[Page {page.page_num}]"]
-    if page.text.strip():
-        parts.append(page.text.strip())
-    return "\n\n".join(parts)
-
-
-def count_images_in_pdf(filepath: str) -> dict[str, int]:
-    reader = pypdf.PdfReader(filepath)
-    total_images = 0
-    valid_images = 0
-    pages_with_images = 0
-
-    for i, page in enumerate(reader.pages, 1):
-        has_image = False
-        try:
-            resources = page.get("/Resources", {})
-            xobjects = resources.get("/XObject", {})
-
-            if isinstance(xobjects, dict):
-                for key, xobj_ref in xobjects.items():
-                    xobj = xobj_ref.get_object()
-                    if xobj.get("/Subtype") == "/Image":
-                        try:
-                            data = xobj.get_data()
-                            if isinstance(data, bytes) and len(data) > 1000:
-                                total_images += 1
-                                if detect_mime(data):
-                                    valid_images += 1
-                                has_image = True
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-
-        if has_image:
-            pages_with_images += 1
-
-    return {
-        "total_images": total_images,
-        "valid_images": valid_images,
-        "invalid_images": total_images - valid_images,
-        "pages_with_images": pages_with_images,
-        "total_pages": len(reader.pages),
-    }
