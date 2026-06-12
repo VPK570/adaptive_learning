@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
 
 :root {
   /* Color Palette matching the UniAI image */
@@ -17,7 +17,7 @@
   --color-accent-hover: #ddd3ff;
   --color-accent-text: #2e1065; /* Dark purple text inside active buttons */
 
-  --font-family: 'Inter', sans-serif;
+  --font-family: var(--font-inter, 'Inter'), sans-serif;
   
   /* Spacing Rhythm (8pt scale mostly) */
   --space-1: 4px;
