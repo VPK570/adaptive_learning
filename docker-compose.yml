@@ -4,7 +4,7 @@ services:
   surrealdb:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
-    command: start --user root --pass root memory
+    command: start --user root --pass root file://data/surrealdb.db
     ports:
       - "8000:8000"
     volumes:

@@ -34,18 +34,27 @@ class RAGPipeline:
         embeddings = await client.embed_text_batch(chunk_texts)
         db = await get_db()
 
+        from app.chunker import extract_page_for_chunk
+        import re
+
         chunks_to_insert = []
         for i, (text_chunk, start, end) in enumerate(raw_chunks):
             if not text_chunk.strip():
                 continue
-            page_approx = int((start / max(len(cleaned), 1)) * 100) + 1
+            
+            page_num = extract_page_for_chunk(text_chunk, cleaned, start)
+            
+            # Clean markers from the chunk text before storing
+            text_chunk_clean = re.sub(r"\[Page \d+\]", "", text_chunk).strip()
+            if not text_chunk_clean:
+                continue
 
             chunk_data = {
                 "course_code": course_code,
                 "source_title": document_title,
                 "topic": topic,
-                "page": page_approx,
-                "text": text_chunk,
+                "page": page_num,
+                "text": text_chunk_clean,
                 "embedding": embeddings[i],
                 "content_type": "text",
                 **(metadata or {}),

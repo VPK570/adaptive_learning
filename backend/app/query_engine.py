@@ -183,13 +183,6 @@ class QueryEngine:
             mastery=mastery,
         )
 
-        strategy_prompt = messages + [
-            {"role": "user", "content": "Briefly outline your strategy for answering this student's question based on the provided materials. Keep it to 2-3 sentences."}
-        ]
-        strategy_text = await client.chat(strategy_prompt, temperature=0.2, max_tokens=150)
-        if strategy_text:
-            yield {"type": "thinking", "content": strategy_text + "\n\n"}
-
         full_response = ""
         async for chunk in client.stream(messages, temperature=0.3, max_tokens=1024):
             if chunk["type"] == "content":
