@@ -29,5 +29,10 @@ class Settings:
     IMAGE_MAX_BATCH_SIZE: int = int(os.getenv("IMAGE_MAX_BATCH_SIZE", "5"))
     IMAGE_MAX_PER_PDF: int = int(os.getenv("IMAGE_MAX_PER_PDF", "50"))
 
+    CURRICULUM_K: int = int(os.getenv("CURRICULUM_K", "3"))
+    CURRICULUM_EF: int = int(os.getenv("CURRICULUM_EF", "40"))
+    CURRICULUM_THRESHOLD: float = float(os.getenv("CURRICULUM_THRESHOLD", "0.6"))
+    RAG_MIN_SIMILARITY: float = float(os.getenv("RAG_MIN_SIMILARITY", "0.4"))
+
 
 settings = get_settings()

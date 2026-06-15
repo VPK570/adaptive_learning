@@ -126,6 +126,14 @@ class RAGPipeline:
             "document_title": document_title,
         }
 
+    async def _calculate_hash(self, filepath: str) -> str:
+        import hashlib
+        sha256_hash = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
     async def ingest_pdf(
         self,
         course_code: str,
@@ -134,6 +142,24 @@ class RAGPipeline:
         topic: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        db = await get_db()
+        content_hash = await self._calculate_hash(filepath)
+        
+        # Check if already ingested
+        existing = await db.query(
+            "SELECT id FROM document WHERE course_code = $course AND content_hash = $hash",
+            {"course": course_code, "hash": content_hash}
+        )
+        if existing:
+            return {
+                "text_chunks": 0,
+                "image_chunks": 0,
+                "total_chunks": 0,
+                "course_code": course_code,
+                "document_title": document_title,
+                "status": "already_ingested"
+            }
+
         from app.pdf_extractor import extract_all_pages
         pages_content = await extract_all_pages(filepath)
 
@@ -160,6 +186,18 @@ class RAGPipeline:
 
         if all_image_items:
             image_result = await self.ingest_images(course_code, document_title, all_image_items, topic, metadata)
+
+        # Record ingestion in document table
+        from datetime import datetime
+        await db.query(
+            "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, created_at: $time}",
+            {
+                "course": course_code,
+                "file": document_title,
+                "hash": content_hash,
+                "time": datetime.now().isoformat()
+            }
+        )
 
         return {
             "text_chunks": text_result["chunks_ingested"],
@@ -202,6 +240,9 @@ class RAGPipeline:
             vector_hits = await db.query(vector_query, v_params)
             if not isinstance(vector_hits, list):
                 vector_hits = []
+            
+            # Apply similarity threshold
+            vector_hits = [h for h in vector_hits if h.get("similarity", 0) >= settings.RAG_MIN_SIMILARITY]
             
             for hit in vector_hits:
                 hit["distance"] = 1.0 - hit.get("similarity", 0.0)
@@ -254,11 +295,16 @@ class RAGPipeline:
                 AND embedding <|{k}, 40|> $query_vec
             """
             image_hits = await db.query(img_query, {"query_vec": query_embedding, "course": course_code})
-            if isinstance(image_hits, list):
-                for row in image_hits:
-                    row["chunk_id"] = str(row["id"])
-                    row["distance"] = 1.0 - row.get("similarity", 0.0)
-                    image_results.append(row)
+            if not isinstance(image_hits, list):
+                image_hits = []
+                
+            # Apply similarity threshold
+            image_hits = [h for h in image_hits if h.get("similarity", 0) >= settings.RAG_MIN_SIMILARITY]
+
+            for row in image_hits:
+                row["chunk_id"] = str(row["id"])
+                row["distance"] = 1.0 - row.get("similarity", 0.0)
+                image_results.append(row)
 
         if content_type == "text":
             return text_results

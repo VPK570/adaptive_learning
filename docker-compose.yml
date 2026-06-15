@@ -22,7 +22,7 @@ services:
       - SURREAL_PASS=root
       - SURREAL_NS=adaptive_learning
       - SURREAL_DB=learning_platform
-      - OPENROUTER_API_KEY=your_openrouter_api_key_here
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 
       - BASE_STORAGE_DIR=/app/storage
       - CHROMA_PATH=/app/chroma_db

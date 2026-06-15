@@ -31,6 +31,19 @@ class OpenRouterClient:
             "X-Title": "Adaptive Learning RAG Pipeline",
         }
 
+    async def health_check(self) -> bool:
+        """Verify API connectivity by fetching available models."""
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/models",
+                    headers=self._headers(),
+                )
+                return response.is_success
+            except Exception as e:
+                print(f"[health_check] OpenRouter connectivity error: {e}")
+                return False
+
     async def embed_text(self, text: str) -> list[float]:
         async with httpx.AsyncClient(timeout=30) as client:
             try:

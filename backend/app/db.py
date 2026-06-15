@@ -36,6 +36,18 @@ class SurrealDBManager:
 
 
     @classmethod
+    async def health_check(cls) -> bool:
+        """Verify database connectivity with a simple query."""
+        try:
+            db = await cls.get_db()
+            # Simple query to check if DB is alive and responding
+            await db.query("INFO FOR DB")
+            return True
+        except Exception as e:
+            print(f"[health_check] SurrealDB connectivity error: {e}")
+            return False
+
+    @classmethod
     async def _init_schema(cls, db: AsyncSurreal):
         """Initialize SurrealDB schema."""
         # Simple schema for testing/base
@@ -114,6 +126,13 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS timestamp ON TABLE query_log TYPE string;
             DEFINE FIELD IF NOT EXISTS out_of_scope ON TABLE query_log TYPE bool;
             DEFINE FIELD IF NOT EXISTS cited_sources ON TABLE query_log TYPE array;
+
+            DEFINE TABLE IF NOT EXISTS document SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE document TYPE string;
+            DEFINE FIELD IF NOT EXISTS filename ON TABLE document TYPE string;
+            DEFINE FIELD IF NOT EXISTS content_hash ON TABLE document TYPE string;
+            DEFINE FIELD IF NOT EXISTS created_at ON TABLE document TYPE string;
+            DEFINE INDEX IF NOT EXISTS content_hash_idx ON TABLE document FIELDS content_hash UNIQUE;
         """
         try:
             print("Executing schema initialization...")
