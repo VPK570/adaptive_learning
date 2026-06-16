@@ -44,6 +44,19 @@ class OpenRouterClient:
             "X-Title": "Adaptive Learning RAG Pipeline",
         }
 
+    async def health_check(self) -> bool:
+        """Verify API connectivity by fetching available models."""
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                response = await client.get(
+                    f"{self.base_url}/models",
+                    headers=self._headers(),
+                )
+                return response.is_success
+            except Exception as e:
+                print(f"[health_check] OpenRouter connectivity error: {e}")
+                return False
+
     async def embed_text(self, text: str) -> list[float]:
         try:
             response = await self._client.post(
@@ -220,6 +233,34 @@ class OpenRouterClient:
             raise ValueError(f"Missing 'data' key: {str(data)[:200]}")
         return data["data"][0]["embedding"]
 
+    async def embed_image(self, text: str) -> list[float]:
+        """
+        Embed a single text query for image search.
+        Uses the multimodal format to ensure 1024-dim embeddings match stored image vectors.
+        """
+        inputs = [{"content": [{"type": "text", "text": text}]}]
+        async with httpx.AsyncClient(timeout=30) as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/embeddings",
+                    headers=self._headers(),
+                    json={
+                        "model": self.embedding_model,
+                        "input": inputs,
+                    },
+                )
+            except httpx.HTTPStatusError as e:
+                print(f"[embed_image] HTTP {e.response.status_code}: {e.response.text[:300]}")
+                raise
+            
+            if not response.is_success:
+                raise ValueError(f"embed_image failed: {response.text[:200]}")
+            
+            data = response.json()
+            if "data" not in data:
+                raise ValueError(f"Missing 'data' key: {str(data)[:200]}")
+            return data["data"][0]["embedding"]
+
     async def chat(
         self,
         messages: list[dict[str, str]],
@@ -307,6 +348,62 @@ class OpenRouterClient:
 
                 except json.JSONDecodeError:
                     continue
+
+    async def stream(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 1024,
+    ):
+        model = model or self.llm_model
+        
+        request_body: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        
+        # We try to enable thinking for streaming as well if supported by model
+        # but for now let's stick to standard streaming.
+        
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=request_body,
+            ) as response:
+                if not response.is_success:
+                    body = await response.aread()
+                    print(f"[stream] HTTP {response.status_code}: {body.decode()[:300]}")
+                    raise ValueError(f"stream failed: {body.decode()[:200]}")
+                
+                import json
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    
+                    try:
+                        data = json.loads(data_str)
+                        choice = data.get("choices", [{}])[0]
+                        delta = choice.get("delta", {})
+                        
+                        # Handle thinking if present
+                        if "thinking" in delta:
+                            yield {"type": "thinking", "content": delta["thinking"]}
+                        
+                        if "content" in delta and delta["content"]:
+                            yield {"type": "content", "content": delta["content"]}
+                            
+                    except json.JSONDecodeError:
+                        continue
 
     async def chat_with_schema(
         self,

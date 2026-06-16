@@ -35,4 +35,11 @@ class Settings:
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  
+
+    CURRICULUM_K: int = int(os.getenv("CURRICULUM_K", "3"))
+    CURRICULUM_EF: int = int(os.getenv("CURRICULUM_EF", "40"))
+    CURRICULUM_THRESHOLD: float = float(os.getenv("CURRICULUM_THRESHOLD", "0.6"))
+    RAG_MIN_SIMILARITY: float = float(os.getenv("RAG_MIN_SIMILARITY", "0.4"))
+
+
 settings = get_settings()

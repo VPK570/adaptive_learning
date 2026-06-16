@@ -60,16 +60,43 @@ def chunk_text(
 
 
 def clean_text(text: str) -> str:
+    # Preserve [Page X] markers by temporarily replacing them
+    text = re.sub(r"\[Page (\d+)\]", r"__PAGE_\1__", text)
+
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]", "", text)
     text = re.sub(r"\bPage\s+\d+\b", "", text)
     text = re.sub(r"-\n", "", text)
+
+    # Restore [Page X] markers
+    text = re.sub(r"__PAGE_(\d+)__", r"[Page \1]", text)
     return text.strip()
 
 
-def extract_page_for_chunk(chunk_text: str, original_text: str) -> int | None:
-    page_markers = [m.start() for m in re.finditer(r"\f|\\pagebreak|Page \d+", original_text)]
-    for i, marker in enumerate(page_markers):
-        if marker > len(original_text) - len(chunk_text):
-            return i + 1
+def extract_page_for_chunk(chunk_text: str, full_text: str, start_index: int) -> int:
+    """
+    Find the actual page number for a chunk by looking for the last [Page X] marker 
+    before or within the chunk.
+    """
+    # Look for all [Page X] markers before the end of the chunk
+    matches = list(re.finditer(r"\[Page (\d+)\]", full_text[:start_index + len(chunk_text)]))
+    if matches:
+        # Get the last marker that appears before or at the start of the chunk
+        # If the chunk starts with a marker, we use it.
+        # If there are markers inside the chunk, the first one is usually the most representative
+        # but the standard approach is to use the page where the chunk starts.
+
+        last_marker_before_or_at_start = None
+        for m in matches:
+            if m.start() <= start_index:
+                last_marker_before_or_at_start = m
+            else:
+                break
+
+        if last_marker_before_or_at_start:
+            return int(last_marker_before_or_at_start.group(1))
+
+        # If no marker before start, but one inside, use the first one inside
+        return int(matches[0].group(1))
+
     return 1

@@ -5,6 +5,14 @@ from app.validation import validate_course_code
 from surrealdb.errors import InternalError
 
 class CurriculumManager:
+    async def _calculate_hash(self, filepath: str) -> str:
+        import hashlib
+        sha256_hash = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
     async def ingest_curriculum(
         self,
         course_code: str,
@@ -12,11 +20,20 @@ class CurriculumManager:
         filepath: str,
     ) -> dict[str, Any]:
         course_code = validate_course_code(course_code)
-        from app.pdf_extractor import extract_all_pages
+        db = await get_db()
+        content_hash = await self._calculate_hash(filepath)
         
+        # Check if already ingested
+        existing = await db.query(
+            "SELECT id FROM document WHERE course_code = $course AND content_hash = $hash",
+            {"course": course_code, "hash": content_hash}
+        )
+        if existing:
+            return {"status": "already_ingested", "chunks_ingested": 0}
+
+        from app.pdf_extractor import extract_all_pages
         pages_content = await extract_all_pages(filepath)
         
-        db = await get_db()
         chunks_to_insert = []
         documents = []
         
@@ -57,6 +74,18 @@ class CurriculumManager:
                         raise
                 else:
                     raise
+            
+            # Record ingestion in document table
+            from datetime import datetime
+            await db.query(
+                "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, created_at: $time}",
+                {
+                    "course": course_code,
+                    "file": document_title,
+                    "hash": content_hash,
+                    "time": datetime.now().isoformat()
+                }
+            )
         
         return {"status": "success", "chunks_ingested": len(chunks_to_insert)}
 
@@ -83,35 +112,36 @@ class CurriculumManager:
         return sorted(list(topics))
 
     async def check_topic_in_curriculum(self, course_code: str, query: str) -> bool:
+        from app.config import settings
         course_code = validate_course_code(course_code)
         query_embedding = await client.embed_text(query)
         db = await get_db()
         
         # 1. Search Curriculum
-        curr_query = """
+        curr_query = f"""
             SELECT vector::similarity::cosine(embedding, $query_vec) AS similarity 
             FROM curriculum_chunk 
             WHERE course_code = $course 
-            AND embedding <|3, 40|> $query_vec
+            AND embedding <|{settings.CURRICULUM_K}, {settings.CURRICULUM_EF}|> $query_vec
         """
         res = await db.query(curr_query, {"query_vec": query_embedding, "course": course_code})
         
         if res:
             similarities = [r["similarity"] for r in res]
-            if max(similarities) > 0.6:
+            if max(similarities) > settings.CURRICULUM_THRESHOLD:
                 return True
         
         # 2. Fallback: Search Course Notes
-        notes_query = """
+        notes_query = f"""
             SELECT vector::similarity::cosine(embedding, $query_vec) AS similarity 
             FROM text_chunk 
             WHERE course_code = $course 
-            AND embedding <|3, 40|> $query_vec
+            AND embedding <|{settings.CURRICULUM_K}, {settings.CURRICULUM_EF}|> $query_vec
         """
         res_notes = await db.query(notes_query, {"query_vec": query_embedding, "course": course_code})
         if res_notes:
             similarities = [r["similarity"] for r in res_notes]
-            if max(similarities) > 0.6:
+            if max(similarities) > settings.CURRICULUM_THRESHOLD:
                 return True
                 
         return False
