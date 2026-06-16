@@ -31,9 +31,7 @@ async def create_course(course_code: str, course_name: str, description: str, ic
         "course_name": course_name,
         "description": description,
         "icon": icon,
-        "created_at": datetime.now().isoformat()
     }
-    
     await db.query("CREATE course CONTENT $content", {"content": new_course})
     return new_course
 

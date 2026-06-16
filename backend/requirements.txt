@@ -8,9 +8,14 @@ pydantic==2.13.4
 python-dotenv==1.2.2
 python-multipart==0.0.20
 Pillow==10.4.0
-
+bcrypt==4.0.1
 pytest==8.3.3
 pytest-asyncio==0.24.0
-
+slowapi
 ruff==0.6.9
 mypy==1.11.2
+tiktoken
+nltk
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic[email]

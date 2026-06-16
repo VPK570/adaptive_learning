@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 from app.openrouter import client
-
+import logging
+logger = logging.getLogger(__name__)
 class Gatekeeper:
     def __init__(self, model: str | None = None):
         self.model = model
@@ -59,7 +60,7 @@ OUTPUT FORMAT (JSON ONLY):
                 response.get("refusal_message")
             )
         except Exception as e:
-            print(f"[Gatekeeper] Error: {e}")
+            logger.error(f"[Gatekeeper] Error: {e}")
             # Fallback to true to avoid blocking the user if the small model fails
             return True, query, None
 

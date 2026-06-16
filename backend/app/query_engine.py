@@ -2,15 +2,39 @@
 
 Handles both text and image chunks in the context window.
 """
-
+from app.validation import sanitize_student_query
 from typing import AsyncGenerator, Dict, Any
-
+from app.config import settings
 from app.openrouter import client
 from app.citation import validate_citations, remove_uncited_claims, extract_all_citations, parse_citation
 from app.gatekeeper import gatekeeper
 from app.verifier import verifier
 from app.rag import RAGPipeline
 
+def extract_cited_sources(response_text: str, chunks: list[dict]) -> list[dict]:
+    """Match citations in the response back to retrieved chunks, deduped."""
+    citations = extract_all_citations(response_text)
+    actually_cited = []
+    seen_keys = set()
+    for cit in citations:
+        c_title, c_page = parse_citation(cit)
+        if not c_title or not c_page:
+            continue
+        for c in chunks:
+            v_title = c.get("source_title", "").lower()
+            v_page = str(c.get("page", ""))
+            key = (v_title, v_page)
+            if key in seen_keys:
+                continue
+            if v_page == c_page and (v_title in c_title or c_title in v_title):
+                actually_cited.append({
+                    "source_title": c.get("source_title", ""),
+                    "page": c.get("page", ""),
+                    "content_type": c.get("content_type", "text"),
+                    "has_image": c.get("has_image", False),
+                })
+                seen_keys.add(key)
+    return actually_cited
 
 def build_tutor_system_prompt(
     course_name: str,
@@ -55,7 +79,7 @@ SAFETY:
 def build_context_window(
     chunks: list[dict],
     history: list[dict],
-    max_turns: int = 8,
+    max_turns: int = settings.MAX_HISTORY_TURNS,
 ) -> str:
     parts = ["COURSE MATERIALS:"]
 
@@ -113,9 +137,10 @@ def build_tutor_prompt(
     system = build_tutor_system_prompt(course_name, course_code, language, mastery)
     context = build_context_window(chunks, history or [])
 
+    safe_query = sanitize_student_query(query)
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": f"{context}\n\nSTUDENT: {query}"},
+        {"role": "user", "content": f"{context}\n\nSTUDENT: {safe_query}"},
     ]
 
 
@@ -199,29 +224,8 @@ class QueryEngine:
         is_valid, reason = await verifier.verify_answer(query, full_response, chunks, course_code)
         if not is_valid:
             yield {"type": "content", "content": f"\n\n⚠️ *Note: This answer may contain information not explicitly in your notes. Reason: {reason}*"}
-
-        citations = extract_all_citations(full_response)
-        actually_cited = []
-        seen_keys = set()
-        for cit in citations:
-            c_title, c_page = parse_citation(cit)
-            if not c_title or not c_page:
-                continue
-            for c in chunks:
-                v_title = c.get("source_title", "").lower()
-                v_page = str(c.get("page", ""))
-                key = (v_title, v_page)
-                if key in seen_keys:
-                    continue
-                if v_page == c_page and (v_title in c_title or c_title in v_title):
-                    actually_cited.append({
-                        "source_title": c.get("source_title", ""),
-                        "page": c.get("page", ""),
-                        "content_type": c.get("content_type", "text"),
-                        "has_image": c.get("has_image", False),
-                    })
-                    seen_keys.add(key)
-
+        actually_cited = extract_cited_sources(full_response, chunks)
+        
         yield {
             "type": "metadata",
             "cited_sources": actually_cited,
@@ -279,25 +283,7 @@ class QueryEngine:
         if not citation_check["valid"]:
             response_text = remove_uncited_claims(response_text)
 
-        citations = extract_all_citations(response_text)
-        actually_cited = []
-        seen_keys = set()
-        for cit in citations:
-            c_title, c_page = parse_citation(cit)
-            if not c_title or not c_page:
-                continue
-            for c in chunks:
-                v_title = c.get("source_title", "").lower()
-                v_page = str(c.get("page", ""))
-                key = (v_title, v_page)
-                if key in seen_keys:
-                    continue
-                if v_page == c_page and (v_title in c_title or c_title in v_title):
-                    actually_cited.append({
-                        "source_title": c.get("source_title", ""),
-                        "page": c.get("page", ""),
-                    })
-                    seen_keys.add(key)
+        actually_cited = extract_cited_sources(response_text, chunks)
 
         return {
             "response": response_text,

@@ -1,11 +1,15 @@
 """Text chunking utilities — 512-token sentence-aware chunking."""
 
 import re
+import tiktoken
+
+
+
+_encoder = tiktoken.get_encoding("cl100k_base")
 
 
 def token_count(text: str) -> int:
-    return len(text.split())
-
+    return len(_encoder.encode(text))
 
 def chunk_text(
     text: str,
@@ -28,7 +32,7 @@ def chunk_text(
     start_char: int = 0
 
     for sentence in sentences:
-        sentence_tokens = len(sentence.split())
+        sentence_tokens = token_count(sentence)
         total_after = current_token_count + sentence_tokens + len(current_sentences)
 
         if total_after > chunk_size and current_sentences:
@@ -39,7 +43,7 @@ def chunk_text(
             if overlap_count > 0:
                 overlap_sents = current_sentences[-overlap_count:]
                 current_sentences = overlap_sents
-                current_token_count = sum(len(s.split()) for s in overlap_sents)
+                current_token_count = sum(token_count(s)  for s in overlap_sents)
                 start_char = start_char + len(" ".join(current_sentences[:len(current_sentences) - overlap_count])) + 1
                 start_char = max(start_char, chunks[-1][2] - 200)
             else:
