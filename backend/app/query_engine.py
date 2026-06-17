@@ -224,29 +224,8 @@ class QueryEngine:
         is_valid, reason = await verifier.verify_answer(query, full_response, chunks, course_code)
         if not is_valid:
             yield {"type": "content", "content": f"\n\n⚠️ *Note: This answer may contain information not explicitly in your notes. Reason: {reason}*"}
-
-        citations = extract_all_citations(full_response)
-        actually_cited = []
-        seen_keys = set()
-        for cit in citations:
-            c_title, c_page = parse_citation(cit)
-            if not c_title or not c_page:
-                continue
-            for c in chunks:
-                v_title = c.get("source_title", "").lower()
-                v_page = str(c.get("page", ""))
-                key = (v_title, v_page)
-                if key in seen_keys:
-                    continue
-                if v_page == c_page and (v_title in c_title or c_title in v_title):
-                    actually_cited.append({
-                        "source_title": c.get("source_title", ""),
-                        "page": c.get("page", ""),
-                        "content_type": c.get("content_type", "text"),
-                        "has_image": c.get("has_image", False),
-                    })
-                    seen_keys.add(key)
-
+        actually_cited = extract_cited_sources(full_response, chunks)
+        
         yield {
             "type": "metadata",
             "cited_sources": actually_cited,
@@ -304,25 +283,7 @@ class QueryEngine:
         if not citation_check["valid"]:
             response_text = remove_uncited_claims(response_text)
 
-        citations = extract_all_citations(response_text)
-        actually_cited = []
-        seen_keys = set()
-        for cit in citations:
-            c_title, c_page = parse_citation(cit)
-            if not c_title or not c_page:
-                continue
-            for c in chunks:
-                v_title = c.get("source_title", "").lower()
-                v_page = str(c.get("page", ""))
-                key = (v_title, v_page)
-                if key in seen_keys:
-                    continue
-                if v_page == c_page and (v_title in c_title or c_title in v_title):
-                    actually_cited.append({
-                        "source_title": c.get("source_title", ""),
-                        "page": c.get("page", ""),
-                    })
-                    seen_keys.add(key)
+        actually_cited = extract_cited_sources(response_text, chunks)
 
         return {
             "response": response_text,
