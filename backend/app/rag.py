@@ -11,6 +11,8 @@ class RAGPipeline:
         self.overlap = settings.CHUNK_OVERLAP_TOKENS
         self.image_max_batch = getattr(settings, "IMAGE_MAX_BATCH_SIZE", 5)
         self.image_max_per_pdf = getattr(settings, "IMAGE_MAX_PER_PDF", 50)
+        self.rrf_k = settings.RRF_K
+        self.ef_search = settings.HNSW_EF_SEARCH
 
     async def ingest(
         self,
@@ -230,7 +232,7 @@ class RAGPipeline:
                 SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM text_chunk 
                 WHERE course_code = $course 
-                AND embedding <|{k}, 40|> $query_vec
+                AND embedding <|{k}, {self.ef_search}|> $query_vec
             """
             v_params = {"query_vec": query_embedding, "course": course_code}
             if topic:
@@ -265,7 +267,7 @@ class RAGPipeline:
                 bm25_hits = []
 
             # C. Reciprocal Rank Fusion (RRF)
-            rrf_k = 60
+            rrf_k = self.rrf_k
             scores = {}
             doc_map = {}
 
@@ -292,12 +294,12 @@ class RAGPipeline:
                 SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
                 FROM image_chunk 
                 WHERE course_code = $course 
-                AND embedding <|{k}, 40|> $query_vec
-            """
+                AND embedding <|{k}, {self.ef_search}|> $query_vec
+                """
             image_hits = await db.query(img_query, {"query_vec": query_embedding, "course": course_code})
             if not isinstance(image_hits, list):
                 image_hits = []
-                
+
             # Apply similarity threshold
             image_hits = [h for h in image_hits if h.get("similarity", 0) >= settings.RAG_MIN_SIMILARITY]
 
@@ -311,7 +313,7 @@ class RAGPipeline:
         if content_type == "image":
             image_results.sort(key=lambda x: x.get("distance", 1.0))
             return image_results
-        
+
         # Combined results
         all_results = text_results + image_results
         # Simple heuristic to interleave or sort combined

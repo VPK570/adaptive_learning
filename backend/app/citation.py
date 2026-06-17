@@ -1,9 +1,20 @@
 """Citation enforcement — every factual claim must cite a source chunk."""
 
 import re
+import nltk
+from nltk.tokenize import sent_tokenize
 
 CITATION_RE = re.compile(r"\[Source:\s*[^\]]+\]", re.IGNORECASE)
 
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt")
+
+try:
+    nltk.data.find("tokenizers/punkt_tab")
+except LookupError:
+    nltk.download("punkt_tab")
 
 def parse_citation(citation_text: str) -> tuple[str, str] | tuple[None, None]:
     """Extract title and page/slide number from a citation string."""
@@ -32,7 +43,8 @@ def extract_all_citations(text: str) -> list[str]:
 
 def remove_uncited_claims(text: str) -> str:
     """Remove or flag claims that lack a citation."""
-    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+   
+    sentences = sent_tokenize(text)
     kept = []
     dropped = 0
 

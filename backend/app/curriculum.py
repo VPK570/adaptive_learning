@@ -34,7 +34,6 @@ class CurriculumManager:
         from app.pdf_extractor import extract_all_pages
         pages_content = await extract_all_pages(filepath)
         
-        db = await get_db()
         chunks_to_insert = []
         documents = []
         

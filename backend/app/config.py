@@ -10,6 +10,7 @@ def get_settings() -> "Settings":
 
 
 class Settings:
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
     SURREAL_URL: str = os.getenv("SURREAL_URL", "ws://localhost:8000/rpc")
     SURREAL_NS: str = os.getenv("SURREAL_NS", "adaptive_learning")
     SURREAL_DB: str = os.getenv("SURREAL_DB", "learning_platform")
@@ -28,6 +29,12 @@ class Settings:
     CHUNK_OVERLAP_TOKENS: int = int(os.getenv("CHUNK_OVERLAP_TOKENS", "64"))
     IMAGE_MAX_BATCH_SIZE: int = int(os.getenv("IMAGE_MAX_BATCH_SIZE", "5"))
     IMAGE_MAX_PER_PDF: int = int(os.getenv("IMAGE_MAX_PER_PDF", "50"))
+    RRF_K: int = int(os.getenv("RRF_K", "60"))
+    HNSW_EF_SEARCH: int = int(os.getenv("HNSW_EF_SEARCH", "40"))
+    MAX_HISTORY_TURNS: int = int(os.getenv("MAX_HISTORY_TURNS", "8"))
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  
 
     CURRICULUM_K: int = int(os.getenv("CURRICULUM_K", "3"))
     CURRICULUM_EF: int = int(os.getenv("CURRICULUM_EF", "40"))

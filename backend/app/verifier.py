@@ -1,6 +1,7 @@
 from typing import Tuple
 from app.openrouter import client
-
+import logging
+logger = logging.getLogger(__name__)
 class Verifier:
     def __init__(self, model: str | None = None):
         self.model = model
@@ -63,7 +64,7 @@ OUTPUT FORMAT (JSON ONLY):
             
             return response.get("valid", True), response.get("reason")
         except Exception as e:
-            print(f"[Verifier] Error: {e}")
+            logger.error(f"[Verifier] Error: {e}")
             return True, None
 
 verifier = Verifier()

@@ -74,6 +74,39 @@ def sanitize_text(text: str, max_length: int) -> str:
     if not text:
         return ""
     return text.strip()[:max_length]
+# Patterns that signal prompt-injection attempts in student input
+INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)", re.IGNORECASE),
+    re.compile(r"disregard\s+(the\s+)?(previous|prior|above|system)", re.IGNORECASE),
+    re.compile(r"forget\s+(everything|all|your\s+instructions)", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+", re.IGNORECASE),
+    re.compile(r"new\s+(instructions|rules|system\s+prompt)", re.IGNORECASE),
+    re.compile(r"act\s+as\s+(if|a|an)\s+", re.IGNORECASE),
+    re.compile(r"</?(system|assistant|user)>", re.IGNORECASE),
+    re.compile(r"\[/?(INST|SYS)\]", re.IGNORECASE),
+    re.compile(r"reveal\s+(your\s+)?(system\s+prompt|instructions)", re.IGNORECASE),
+]
+
+
+def sanitize_student_query(text: str, max_length: int = MAX_QUESTION_LENGTH) -> str:
+    """
+    Sanitize a student's question before it enters the LLM prompt.
+    Strips role-injection tokens and neutralizes common override phrases.
+    """
+    if not text:
+        return ""
+
+    cleaned = text.strip()[:max_length]
+
+    # Remove fake chat-role / template markers outright
+    cleaned = re.sub(r"</?(system|assistant|user)>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[/?(INST|SYS)\]", "", cleaned, flags=re.IGNORECASE)
+
+    # Neutralize override phrases (don't delete — flag them so the model sees they were attempted)
+    for pat in INJECTION_PATTERNS:
+        cleaned = pat.sub("[filtered]", cleaned)
+
+    return cleaned.strip()
 
 def validate_filename(filename: str) -> str:
     """Ensures a filename is safe and doesn't contain path traversal components."""

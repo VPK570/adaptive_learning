@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 
@@ -9,6 +10,7 @@ from app.schemas import FlashcardRequest, SaveFlashcardRequest
 from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
 from app.openrouter import client
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -23,7 +25,7 @@ def safe_json_parse(response_str: str):
             json_str = json_str.split("```")[1].split("```")[0].strip()
         return json.loads(json_str)
     except Exception as e:
-        print(f"Error parsing JSON: {e}\nResponse: {response_str}")
+        logger.error(f"Error parsing JSON: {e}\nResponse: {response_str}")
         return None
 
 

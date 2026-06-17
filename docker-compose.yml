@@ -22,8 +22,8 @@ services:
       - SURREAL_PASS=root
       - SURREAL_NS=adaptive_learning
       - SURREAL_DB=learning_platform
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-
+      - OPENROUTER_API_KEY=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
+      - JWT_SECRET=fb7cabb905a70294be229de37d88365b6cc6a56095a23f399d159abef55fee04
       - BASE_STORAGE_DIR=/app/storage
       - CHROMA_PATH=/app/chroma_db
     depends_on:
@@ -50,7 +50,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
