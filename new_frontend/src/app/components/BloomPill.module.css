@@ -1,0 +1,15 @@
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font: var(--text-label-md);
+  text-transform: uppercase;
+}
+
+.remember { background-color: rgba(192, 193, 255, 0.1); color: var(--color-primary); }
+.understand { background-color: rgba(78, 222, 163, 0.1); color: var(--color-secondary); }
+.apply { background-color: rgba(255, 178, 183, 0.1); color: var(--color-tertiary); }
+.analyze { background-color: rgba(167, 139, 250, 0.1); color: var(--color-role-professor); } /* reusing purple */
+.evaluate { background-color: rgba(251, 191, 36, 0.1); color: var(--color-role-student); } /* reusing yellow */
+.create { background-color: rgba(255, 81, 106, 0.1); color: var(--color-tertiary-container); }
+.default { background-color: var(--color-surface-container-high); color: var(--color-on-surface-variant); }

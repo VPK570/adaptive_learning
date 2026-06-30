@@ -1,0 +1,109 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-bottom: var(--space-8);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.welcomeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.greeting {
+  font: var(--text-display-sm);
+  color: var(--color-on-background);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font: var(--text-body-lg);
+  color: var(--color-on-surface-variant);
+}
+
+.sectionTitle {
+  font: var(--text-headline-md);
+  color: var(--color-on-background);
+  margin-bottom: var(--space-4);
+}
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+
+.middleRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-6);
+}
+
+.activityColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.studentCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.studentName {
+  font: var(--text-label-lg);
+  color: var(--color-on-background);
+}
+
+.courseMeta {
+  font: var(--text-body-md);
+  color: var(--color-on-surface-variant);
+}
+
+.heatmapColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.heatmapWrapper {
+  background-color: var(--color-surface-container-low);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-outline-variant);
+  padding: var(--space-6);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coursesSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.courseGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-6);
+}
+
+@media (max-width: 1024px) {
+  .statsRow {
+    grid-template-columns: 1fr;
+  }
+  
+  .middleRow {
+    grid-template-columns: 1fr;
+  }
+  
+  .courseGrid {
+    grid-template-columns: 1fr;
+  }
+}

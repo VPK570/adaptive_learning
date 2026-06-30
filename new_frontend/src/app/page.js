@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
@@ -8,6 +9,7 @@ export default function Home() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const tabs = ['Student', 'Faculty', 'Admin'];
 
@@ -46,7 +48,15 @@ export default function Home() {
     try {
       // Fake network request
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.log(`Login intent registered successfully for role: ${tabs[activeTab]}`);
+      const role = tabs[activeTab];
+
+if (role === "Student") {
+  router.push("/dashboard");
+} else if (role === "Faculty") {
+  router.push("/faculty");
+} else if (role === "Admin") {
+  router.push("/admin");
+}
     } catch (err) {
       console.error(err);
     } finally {
