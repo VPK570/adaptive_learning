@@ -1,0 +1,358 @@
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 0;
+  height: calc(100vh - 64px - var(--space-12));
+  margin: calc(-1 * var(--margin-desktop));
+  margin-top: 0;
+}
+
+/* ── Materials Panel ─────────────────────────────────────────── */
+.materialsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  border-right: 1px solid var(--color-outline-variant);
+  padding: var(--space-6);
+  overflow-y: auto;
+  background-color: var(--color-surface);
+}
+
+.courseHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.courseTitle {
+  font: var(--text-headline-md);
+  color: var(--color-on-background);
+}
+
+.courseMeta {
+  font: var(--text-body-md);
+  color: var(--color-on-surface-variant);
+}
+
+.masteryBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--color-surface-container-low);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-outline-variant);
+}
+
+.masteryRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.masteryLabel {
+  font: var(--text-label-md);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+}
+
+.masteryValue {
+  font: var(--text-headline-sm);
+  color: var(--color-primary);
+}
+
+.nextItem {
+  font: var(--text-body-md);
+  color: var(--color-on-surface-variant);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.zapIcon {
+  color: var(--color-secondary);
+}
+
+.materialsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.materialsTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-label-lg);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+}
+
+.materialItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.materialItem:hover {
+  background-color: var(--color-surface-container);
+}
+
+.activeMaterial {
+  background-color: rgba(192, 193, 255, 0.05);
+  border-color: var(--color-outline-variant);
+}
+
+.matIcon {
+  margin-top: 2px;
+  color: var(--color-on-surface-variant);
+  flex-shrink: 0;
+}
+
+.matContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.matName {
+  font: var(--text-body-md);
+  color: var(--color-on-background);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matMeta {
+  font: var(--text-label-md);
+  color: var(--color-outline);
+}
+
+/* ── Chat Panel ──────────────────────────────────────────────── */
+.chatPanel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--color-background);
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-outline-variant);
+  background-color: var(--color-surface);
+}
+
+.sparkleIcon {
+  color: var(--color-primary);
+}
+
+.chatTitle {
+  font: var(--text-headline-sm);
+  color: var(--color-on-background);
+}
+
+.contextTag {
+  margin-left: auto;
+  font: var(--text-mono-md);
+  color: var(--color-on-surface-variant);
+  background-color: var(--color-surface-container);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.chatBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.messageBubble {
+  max-width: 85%;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+}
+
+.user {
+  align-self: flex-end;
+  background-color: var(--color-primary-container);
+  color: var(--color-on-background);
+}
+
+.assistant {
+  align-self: flex-start;
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  color: var(--color-on-background);
+}
+
+.msgText {
+  font: var(--text-body-lg);
+  line-height: 1.65;
+}
+
+.assistantContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bulletList {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bulletList li {
+  font: var(--text-body-lg);
+  line-height: 1.6;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-primary);
+}
+
+.sourcesBlock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.sourcesLabel {
+  font: var(--text-label-md);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+}
+
+.sourceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--color-surface-container);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font: var(--text-mono-md);
+  color: var(--color-on-surface-variant);
+}
+
+.msgActions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.msgActionBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-outline);
+  font: var(--text-label-md);
+  text-transform: uppercase;
+  transition: color var(--transition-fast);
+}
+
+.msgActionBtn:hover {
+  color: var(--color-on-surface);
+}
+
+/* ── Chat Input ──────────────────────────────────────────────── */
+.chatInputArea {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-outline-variant);
+  background-color: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: flex-end;
+  background-color: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  transition: border-color var(--transition-fast);
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--color-primary);
+}
+
+.chatInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-on-background);
+  font: var(--text-body-lg);
+  resize: none;
+  min-height: 24px;
+  max-height: 120px;
+}
+
+.chatInput::placeholder {
+  color: var(--color-outline);
+}
+
+.sendBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-container-high);
+  color: var(--color-outline);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sendActive {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.sendActive:hover {
+  background-color: var(--color-primary-fixed);
+}
+
+.disclaimer {
+  font: var(--text-label-md);
+  color: var(--color-outline);
+  text-align: center;
+}
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .materialsPanel {
+    border-right: none;
+    border-bottom: 1px solid var(--color-outline-variant);
+    max-height: 300px;
+  }
+
+  .chatPanel {
+    min-height: 60vh;
+  }
+}

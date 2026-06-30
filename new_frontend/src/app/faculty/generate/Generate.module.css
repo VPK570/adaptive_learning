@@ -1,0 +1,208 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-bottom: var(--space-8);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pageTitle {
+  font: var(--text-display-sm);
+  color: var(--color-on-background);
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  font: var(--text-body-lg);
+  color: var(--color-on-surface-variant);
+}
+
+.formLayout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.configPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.formSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-headline-md);
+  color: var(--color-on-background);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.bloomGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.addBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary);
+  font: var(--text-label-md);
+  text-transform: uppercase;
+  transition: color var(--transition-fast);
+}
+
+.addBtn:hover {
+  color: var(--color-primary-fixed);
+}
+
+.sectionsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+}
+
+.sectionConfig {
+  padding-left: 0;
+}
+
+.sectionMeta {
+  font: var(--text-mono-md);
+  color: var(--color-on-surface-variant);
+}
+
+.generateBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 16px;
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font: var(--text-label-lg);
+  text-transform: uppercase;
+  border-radius: var(--radius-DEFAULT);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.generateBtn:hover {
+  background-color: var(--color-primary-fixed);
+}
+
+.generateBtn:active {
+  transform: scale(0.98);
+}
+
+/* ── Preview / Summary Panel ─────────────────────────────────── */
+.previewPanel {
+  position: sticky;
+  top: calc(64px + var(--space-6)); /* below topbar */
+}
+
+.summaryCard {
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.summaryTitle {
+  font: var(--text-headline-sm);
+  color: var(--color-on-background);
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.summaryLabel {
+  font: var(--text-label-md);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.summaryValue {
+  font: var(--text-body-md);
+  color: var(--color-on-background);
+  text-align: right;
+}
+
+.summaryDivider {
+  height: 1px;
+  background-color: var(--color-outline-variant);
+}
+
+.bloomPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* ── Preview layout (full-width paper preview) ───────────────── */
+.previewLayout {
+  height: calc(100vh - 64px - var(--space-12));
+  margin: calc(-1 * var(--margin-desktop));
+  margin-top: 0;
+}
+
+@media (max-width: 1024px) {
+  .formLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .bloomGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .previewPanel {
+    position: static;
+  }
+}

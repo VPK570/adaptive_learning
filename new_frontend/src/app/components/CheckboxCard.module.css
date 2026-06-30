@@ -1,0 +1,83 @@
+.card {
+  display: block;
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.hiddenInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid var(--color-outline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.checkIcon {
+  color: var(--color-on-primary);
+}
+
+.label {
+  font: var(--text-headline-sm);
+  color: var(--color-on-surface);
+  transition: color var(--transition-fast);
+}
+
+.description {
+  font: var(--text-body-md);
+  color: var(--color-on-surface-variant);
+  margin-left: 32px; /* align with text */
+}
+
+.card:hover {
+  border-color: var(--color-outline);
+  background-color: var(--color-surface-container);
+}
+
+.card.checked {
+  background-color: rgba(192, 193, 255, 0.05); /* primary low opacity */
+}
+
+.card.checked.primary { border-color: var(--color-primary); }
+.card.checked.secondary { border-color: var(--color-secondary); }
+.card.checked.tertiary { border-color: var(--color-tertiary); }
+.card.checked.admin { border-color: var(--color-role-admin); }
+.card.checked.professor { border-color: var(--color-role-professor); }
+.card.checked.student { border-color: var(--color-role-student); }
+
+.card.checked .checkbox {
+  border-color: transparent;
+}
+
+.card.checked.primary .checkbox { background-color: var(--color-primary); }
+.card.checked.secondary .checkbox { background-color: var(--color-secondary); }
+.card.checked.tertiary .checkbox { background-color: var(--color-tertiary); }
+.card.checked.admin .checkbox { background-color: var(--color-role-admin); }
+.card.checked.professor .checkbox { background-color: var(--color-role-professor); }
+.card.checked.student .checkbox { background-color: var(--color-role-student); }
+
+.card.checked .label {
+  color: var(--color-on-background);
+}

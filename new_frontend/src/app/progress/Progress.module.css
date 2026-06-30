@@ -1,0 +1,175 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-bottom: var(--space-8);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pageTitle {
+  font: var(--text-display-sm);
+  color: var(--color-on-background);
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  font: var(--text-body-lg);
+  color: var(--color-on-surface-variant);
+}
+
+.sectionTitle {
+  font: var(--text-headline-md);
+  color: var(--color-on-background);
+  margin-bottom: var(--space-4);
+}
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+
+.middleRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.topicsColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.topicsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+}
+
+.topicItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.topicHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.topicName {
+  font: var(--text-body-lg);
+  color: var(--color-on-background);
+  font-weight: 500;
+}
+
+.topicPercent {
+  font: var(--text-mono-md);
+  color: var(--color-on-surface-variant);
+}
+
+.heatmapColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.heatmapCard {
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.heatmapStats {
+  display: flex;
+  gap: var(--space-8);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.heatmapStat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.heatmapValue {
+  font: var(--text-headline-md);
+  color: var(--color-on-background);
+}
+
+.heatmapLabel {
+  font: var(--text-label-md);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+}
+
+.revisionSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.revisionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.revisionCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-6);
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  gap: var(--space-4);
+  transition: border-color var(--transition-fast);
+}
+
+.revisionCard:hover {
+  border-color: var(--color-outline);
+}
+
+.revisionContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.revisionTitle {
+  font: var(--text-headline-sm);
+  color: var(--color-on-background);
+}
+
+.revisionNote {
+  font: var(--text-body-md);
+  color: var(--color-on-surface-variant);
+}
+
+@media (max-width: 1024px) {
+  .statsRow {
+    grid-template-columns: 1fr;
+  }
+
+  .middleRow {
+    grid-template-columns: 1fr;
+  }
+
+  .revisionGrid {
+    grid-template-columns: 1fr;
+  }
+}
