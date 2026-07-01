@@ -1,18 +1,11 @@
 from typing import Any
 from app.db import get_db
 from app.openrouter import client
+from app.rag import calculate_file_hash
 from app.validation import validate_course_code
 from surrealdb.errors import InternalError
 
 class CurriculumManager:
-    async def _calculate_hash(self, filepath: str) -> str:
-        import hashlib
-        sha256_hash = hashlib.sha256()
-        with open(filepath, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-
     async def ingest_curriculum(
         self,
         course_code: str,
@@ -21,7 +14,7 @@ class CurriculumManager:
     ) -> dict[str, Any]:
         course_code = validate_course_code(course_code)
         db = await get_db()
-        content_hash = await self._calculate_hash(filepath)
+        content_hash = calculate_file_hash(filepath)
         
         # Check if already ingested
         existing = await db.query(

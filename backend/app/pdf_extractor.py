@@ -96,20 +96,8 @@ def _extract_page_images(page) -> list[ImageContent]:
     return images
 
 
-async def extract_all_pages(filepath: str) -> list[PageContent]:
-    reader = pypdf.PdfReader(filepath)
-    pages: list[PageContent] = []
-
-    for i, page in enumerate(reader.pages, 1):
-        text = page.extract_text() or ""
-        images = _extract_page_images(page)
-        pages.append(PageContent(page_num=i, text=text, images=images))
-
-    return pages
-
-
-async def extract_all_pages_from_bytes(pdf_bytes: bytes) -> list[PageContent]:
-    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+async def extract_all_pages(source: str | bytes) -> list[PageContent]:
+    reader = pypdf.PdfReader(io.BytesIO(source) if isinstance(source, bytes) else source)
     pages: list[PageContent] = []
 
     for i, page in enumerate(reader.pages, 1):
