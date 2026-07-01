@@ -1,39 +1,31 @@
-from datetime import datetime
-from app.validation import validate_course_code, sanitize_id
-from app.db import get_db
+from app.database import Database
+from app.stores.chat_store import ChatStore
+
 
 async def get_course_history(course_code, session_id):
-    course_code = validate_course_code(course_code)
-    session_id = sanitize_id(session_id)
-    
-    db = await get_db()
-    res = await db.query(
-        "SELECT * FROM chat_history WHERE course_code = $course AND session_id = $session_id ORDER BY timestamp ASC",
-        {"course": course_code, "session_id": session_id}
-    )
-    
-    return res if res else []
+    async with Database.session() as session:
+        store = ChatStore(session)
+        messages = await store.get_history(course_code, session_id)
+        return [
+            {
+                "id": str(m.id),
+                "course_code": m.course_code,
+                "session_id": m.session_id,
+                "role": m.role,
+                "content": m.content,
+                "timestamp": m.timestamp.isoformat() if m.timestamp else None,
+            }
+            for m in messages
+        ]
+
 
 async def add_message(course_code, session_id, role, content):
-    course_code = validate_course_code(course_code)
-    session_id = sanitize_id(session_id)
-    
-    db = await get_db()
-    message = {
-        "course_code": course_code,
-        "session_id": session_id,
-        "role": role,
-        "content": content,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-    await db.query("CREATE chat_history CONTENT $msg", {"msg": message})
+    async with Database.session() as session:
+        store = ChatStore(session)
+        await store.add_message(course_code, session_id, role, content)
+
 
 async def clear_course_history(course_code, session_id):
-    course_code = validate_course_code(course_code)
-    session_id = sanitize_id(session_id)
-    
-    db = await get_db()
-    await db.query(
-        "DELETE chat_history WHERE course_code = $course AND session_id = $session_id",
-        {"course": course_code, "session_id": session_id}
-    )
+    async with Database.session() as session:
+        store = ChatStore(session)
+        await store.clear_history(course_code, session_id)

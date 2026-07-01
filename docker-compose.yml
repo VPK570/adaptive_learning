@@ -22,12 +22,14 @@ services:
       - SURREAL_PASS=root
       - SURREAL_NS=adaptive_learning
       - SURREAL_DB=learning_platform
-      - OPENROUTER_API_KEY=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
-      - JWT_SECRET=fb7cabb905a70294be229de37d88365b6cc6a56095a23f399d159abef55fee04
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/adaptive_learning}
       - BASE_STORAGE_DIR=/app/storage
       - CHROMA_PATH=/app/chroma_db
     depends_on:
       - surrealdb
+      - postgres
     volumes:
       - ./backend/storage:/app/storage
       - ./chroma_db:/app/chroma_db

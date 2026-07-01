@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
+from app.database import Database
 from app.rag import RAGPipeline
 from app.query_engine import QueryEngine
 from app.curriculum import CurriculumManager
@@ -36,6 +37,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    Database.init()
+    if not await Database.wait_ready():
+        logger.warning("Postgres not available at startup — some endpoints will fail until DB is reachable")
+    await Database.create_all()
+    logger.info("Postgres connected and tables created")
+
     app.state.rag = RAGPipeline()
     app.state.engine = QueryEngine()
     app.state.curriculum = CurriculumManager()
@@ -43,6 +50,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up RAG pipeline API...")
     yield
     logger.info("Shutting down...")
+    await Database.close()
 
 
 app = FastAPI(title="Adaptive Learning RAG API", version="1.0.0", lifespan=lifespan)
