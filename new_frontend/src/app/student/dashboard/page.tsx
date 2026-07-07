@@ -1,9 +1,9 @@
 import React from 'react';
-import AppShell from '../components/AppShell';
-import RadialProgress from '../components/RadialProgress';
-import StatTile from '../components/StatTile';
-import CourseCard from '../components/CourseCard';
-import { mockStudentUser, mockStudentStats, mockStudentCourses } from '../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import RadialProgress from '@/app/components/RadialProgress';
+import StatTile from '@/app/components/StatTile';
+import CourseCard from '@/app/components/CourseCard';
+import { mockStudentUser, mockStudentStats, mockStudentCourses } from '@/lib/mockData';
 import styles from './Dashboard.module.css';
 
 export default function StudentDashboard() {

@@ -43,7 +43,7 @@ export default function CourseCard({ course, variant = 'student' }) {
           <FileText size={16} className={styles.docIcon} />
           <span className={styles.docText}>{course.docCount} docs</span>
         </div>
-        <Link href={`/courses/${course.id}`} className={styles.ghostBtn}>
+        <Link href={`/student/courses/${course.id}`} className={styles.ghostBtn}>
           <span>Open</span>
           <ArrowRight size={16} />
         </Link>

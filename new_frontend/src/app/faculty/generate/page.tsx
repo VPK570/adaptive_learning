@@ -3,13 +3,13 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Wand2, Plus, Settings, FileText, ChevronDown } from 'lucide-react';
-import AppShell from '../../components/AppShell';
-import FormField from '../../components/FormField';
-import CheckboxCard from '../../components/CheckboxCard';
-import RemovableSection from '../../components/RemovableSection';
-import PaperPreview from '../../components/PaperPreview';
-import BloomPill from '../../components/BloomPill';
-import { mockFacultyUser, generateSections, generatedPaper } from '../../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import FormField from '@/app/components/FormField';
+import CheckboxCard from '@/app/components/CheckboxCard';
+import RemovableSection from '@/app/components/RemovableSection';
+import PaperPreview from '@/app/components/PaperPreview';
+import BloomPill from '@/app/components/BloomPill';
+import { mockFacultyUser, generateSections, generatedPaper } from '@/lib/mockData';
 import styles from './Generate.module.css';
 
 export default function QuestionPaperGenerator() {
@@ -29,7 +29,7 @@ export default function QuestionPaperGenerator() {
   const [sections, setSections] = useState(generateSections);
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/faculty' },
+    { label: 'Dashboard', href: '/faculty/dashboard' },
     { label: 'Generate Paper' }
   ];
 

@@ -1,10 +1,10 @@
 import React from 'react';
-import AppShell from '../components/AppShell';
-import StatTile from '../components/StatTile';
-import ProgressBar from '../components/ProgressBar';
-import ActivityHeatmap from '../components/ActivityHeatmap';
-import Badge from '../components/Badge';
-import { mockStudentUser, progressStats, topicsBreakdown, recommendedRevision } from '../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import StatTile from '@/app/components/StatTile';
+import ProgressBar from '@/app/components/ProgressBar';
+import ActivityHeatmap from '@/app/components/ActivityHeatmap';
+import Badge from '@/app/components/Badge';
+import { mockStudentUser, progressStats, topicsBreakdown, recommendedRevision } from '@/lib/mockData';
 import styles from './Progress.module.css';
 
 export default function LearningProgress() {

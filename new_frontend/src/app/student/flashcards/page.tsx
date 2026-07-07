@@ -1,5 +1,5 @@
 import React from 'react';
-import AppShell from '../components/AppShell';
+import AppShell from '@/app/components/AppShell';
 import { Layers } from 'lucide-react';
 
 export default function FlashcardsPlaceholder() {
