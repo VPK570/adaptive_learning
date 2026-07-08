@@ -49,13 +49,12 @@ export default function Home() {
       // Fake network request
       await new Promise((resolve) => setTimeout(resolve, 1500));
       const role = tabs[activeTab];
-
 if (role === "Student") {
-  router.push("/dashboard");
+  router.push("/student/dashboard");
 } else if (role === "Faculty") {
-  router.push("/faculty");
+  router.push("/faculty/dashboard");
 } else if (role === "Admin") {
-  router.push("/admin");
+  router.push("/admin/dashboard");
 }
     } catch (err) {
       console.error(err);
