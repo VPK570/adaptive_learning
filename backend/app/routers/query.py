@@ -22,17 +22,21 @@ router = APIRouter()
 @router.get("/health")
 async def health():
     from app.db import SurrealDBManager
+    from app.database import Database
     from app.openrouter import client
     
+    pg_ok = await Database.health_check()
     surreal_ok = await SurrealDBManager.health_check()
     openrouter_ok = await client.health_check()
     
-    status = "ok" if surreal_ok and openrouter_ok else "degraded"
+    deps_ok = [pg_ok, surreal_ok, openrouter_ok]
+    status = "ok" if all(deps_ok) else "degraded"
     
     return {
         "status": status,
         "version": "1.0.0",
         "dependencies": {
+            "postgres": "ok" if pg_ok else "error",
             "surrealdb": "ok" if surreal_ok else "error",
             "openrouter": "ok" if openrouter_ok else "error"
         }

@@ -2,16 +2,19 @@
 
 import React, { useState } from 'react';
 import { useRouter } from "next/navigation";
+import { login } from '@/lib/api';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({ email: '', password: '' });
+  const [serverError, setServerError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const tabs = ['Student', 'Faculty', 'Admin'];
+  const roleMap = { Student: 'student', Faculty: 'faculty', Admin: 'admin' };
 
   const validateEmail = (email) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,6 +24,7 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors({ email: '', password: '' });
+    setServerError('');
 
     let isValid = true;
     const newErrors = { email: '', password: '' };
@@ -46,18 +50,20 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      // Fake network request
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      const role = tabs[activeTab];
-if (role === "Student") {
-  router.push("/student/dashboard");
-} else if (role === "Faculty") {
-  router.push("/faculty/dashboard");
-} else if (role === "Admin") {
-  router.push("/admin/dashboard");
-}
+      const data = await login(email, password);
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('role', data.role);
+
+      const selectedRole = roleMap[tabs[activeTab]];
+      if (selectedRole === 'faculty' || data.role === 'faculty') {
+        router.push('/faculty');
+      } else if (data.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err) {
-      console.error(err);
+      setServerError(err.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -150,6 +156,8 @@ if (role === "Student") {
             </div>
             {errors.password && <span className="form-error is-visible">{errors.password}</span>}
           </div>
+
+          {serverError && <div className="form-error is-visible" style={{ textAlign: 'center', marginBottom: '8px' }}>{serverError}</div>}
 
           <button 
             type="submit" 

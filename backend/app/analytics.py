@@ -1,11 +1,14 @@
 from collections import Counter
 from datetime import datetime
+
 from app.validation import (
     validate_course_code,
     sanitize_text,
     MAX_QUESTION_LENGTH,
 )
-from app.db import get_db
+from app.database import Database
+from app.stores.analytics_store import AnalyticsStore
+
 
 async def log_query(
     question: str,
@@ -16,88 +19,100 @@ async def log_query(
     course_code = validate_course_code(course_code)
     question = sanitize_text(question, MAX_QUESTION_LENGTH)
 
-    refusal_phrase = "This topic is not covered"
-    out_of_scope = refusal_phrase in response
-
-    log_entry = {
-        "question": question,
-        "course_code": course_code,
-        "timestamp": datetime.now().isoformat(),
-        "response_preview": response[:200],
-        "out_of_scope": out_of_scope,
-        "cited_sources": cited_sources or [],
-    }
-
-    db = await get_db()
-    await db.query("CREATE query_log CONTENT $entry", {"entry": log_entry})
+    async with Database.session() as session:
+        store = AnalyticsStore(session)
+        await store.log_query(question, course_code, response, cited_sources)
 
 
 async def get_unanswered_questions(course_code: str):
     course_code = validate_course_code(course_code)
-    db = await get_db()
-    res = await db.query(
-        "SELECT * FROM query_log WHERE course_code = $code AND out_of_scope = true",
-        {"code": course_code}
-    )
-    return res if res else []
+    async with Database.session() as session:
+        store = AnalyticsStore(session)
+        logs = await store.get_unanswered(course_code)
+        return [
+            {
+                "id": str(l.id),
+                "course_code": l.course_code,
+                "question": l.question,
+                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                "out_of_scope": l.out_of_scope,
+            }
+            for l in logs
+        ]
 
 
 async def get_coverage(course_code: str):
     course_code = validate_course_code(course_code)
-    db = await get_db()
-    res = await db.query(
-        "SELECT cited_sources FROM query_log WHERE course_code = $code",
-        {"code": course_code}
-    )
-    
-    doc_hits = {}
-    if res:
-        for log in res:
-            for src in log.get("cited_sources", []):
-                title = src.get("source_title") if isinstance(src, dict) else str(src)
-                if title:
-                    doc_hits[title] = doc_hits.get(title, 0) + 1
-    return doc_hits
+    async with Database.session() as session:
+        store = AnalyticsStore(session)
+        return await store.get_coverage(course_code)
 
 
 async def get_analytics(course_code: str):
     course_code = validate_course_code(course_code)
-    db = await get_db()
-    
-    logs_res = await db.query("SELECT * FROM query_log WHERE course_code = $code", {"code": course_code})
-    course_logs = logs_res if logs_res else []
+    async with Database.session() as session:
+        store = AnalyticsStore(session)
+        course_logs = await store.get_all_for_course(course_code)
 
-    # Get topics from curriculum chunks
-    topics_res = await db.query("SELECT topic FROM (SELECT topic FROM text_chunk WHERE course_code = $code) GROUP BY topic", {"code": course_code})
-    curriculum_topics = [r["topic"] for r in (topics_res if topics_res else []) if r.get("topic")]
+        questions = [l.question for l in course_logs]
+        top_questions = Counter(questions).most_common(10)
 
+        dates = [l.timestamp.strftime("%Y-%m-%d") for l in course_logs if l.timestamp]
+        questions_per_day = dict(Counter(dates))
+
+        recent = sorted(course_logs, key=lambda x: x.timestamp or datetime.min, reverse=True)[:10]
+
+    # Get topics from SurrealDB (RAG vector store — stays there)
+    try:
+        from app.db import get_db as get_surreal_db
+        sdb = await get_surreal_db()
+        topics_res = await sdb.query(
+            "SELECT topic FROM (SELECT topic FROM text_chunk WHERE course_code = $code) GROUP BY topic",
+            {"code": course_code}
+        )
+        curriculum_topics = [r["topic"] for r in (topics_res if topics_res else []) if r.get("topic")]
+    except Exception:
+        curriculum_topics = []
+
+    # Topic engagement analytics
     topic_hits = {}
     for topic in curriculum_topics:
-        hits = sum(1 for log in course_logs if topic.lower() in log["question"].lower())
+        hits = sum(1 for log in course_logs if topic.lower() in log.question.lower())
         topic_hits[topic] = hits
 
     weak_topics = [t for t, h in topic_hits.items() if 0 < h < 2]
     suggested_revision = [t for t, h in topic_hits.items() if h == 0]
-
-    questions = [log["question"] for log in course_logs]
-    top_questions = Counter(questions).most_common(10)
-
-    dates = [log["timestamp"].split("T")[0] for log in course_logs]
-    questions_per_day = dict(Counter(dates))
-
-    recent_questions = sorted(course_logs, key=lambda x: x["timestamp"], reverse=True)[:10]
 
     return {
         "top_questions": [{"question": q, "count": c} for q, c in top_questions],
         "questions_per_day": questions_per_day,
         "weak_topics": weak_topics,
         "suggested_revision": suggested_revision,
-        "recent_questions": recent_questions,
+        "recent_questions": [
+            {
+                "id": str(l.id),
+                "course_code": l.course_code,
+                "question": l.question,
+                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                "out_of_scope": l.out_of_scope,
+            }
+            for l in recent
+        ],
     }
 
 
 async def get_all_questions(course_code: str):
     course_code = validate_course_code(course_code)
-    db = await get_db()
-    res = await db.query("SELECT * FROM query_log WHERE course_code = $code", {"code": course_code})
-    return res if res else []
+    async with Database.session() as session:
+        store = AnalyticsStore(session)
+        logs = await store.get_all_for_course(course_code)
+        return [
+            {
+                "id": str(l.id),
+                "course_code": l.course_code,
+                "question": l.question,
+                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                "out_of_scope": l.out_of_scope,
+            }
+            for l in logs
+        ]

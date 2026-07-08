@@ -20,7 +20,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import settings
-from app.db import get_db
+from app.database import Database
+from app.stores.user_store import UserStore
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +70,18 @@ def decode_token(token: str) -> dict[str, Any]:
 
 
 async def get_user_by_email(email: str) -> Optional[dict[str, Any]]:
-    db = await get_db()
-    res = await db.query(
-        "SELECT * FROM users WHERE email = $email LIMIT 1",
-        {"email": email.lower().strip()},
-    )
-    if isinstance(res, list) and res:
-        return res[0]
-    return None
+    async with Database.session() as session:
+        store = UserStore(session)
+        user = await store.get_by_email(email)
+        if user is None:
+            return None
+        return {
+            "id": user.id,
+            "email": user.email,
+            "hashed_password": user.hashed_password,
+            "role": user.role,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        }
 
 
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict[str, Any]:
