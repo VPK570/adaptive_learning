@@ -3,10 +3,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Send, BookOpen, Sparkles, Copy, ThumbsUp, ChevronDown, Zap } from 'lucide-react';
-import AppShell from '../../components/AppShell';
-import Badge from '../../components/Badge';
-import ProgressBar from '../../components/ProgressBar';
-import { mockStudentUser, courseDetail, chatMessages } from '../../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import Badge from '@/app/components/Badge';
+import ProgressBar from '@/app/components/ProgressBar';
+import { mockStudentUser, courseDetail, chatMessages } from '@/lib/mockData';
 import styles from './CourseDetail.module.css';
 
 export default function CourseDetailPage({ params }) {
@@ -18,7 +18,7 @@ export default function CourseDetailPage({ params }) {
   const chatEndRef = useRef(null);
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Dashboard', href: '/student/dashboard' },
     { label: courseDetail.title }
   ];
 

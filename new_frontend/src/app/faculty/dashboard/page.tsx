@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import AppShell from '../components/AppShell';
-import StatTile from '../components/StatTile';
-import CourseCard from '../components/CourseCard';
-import DataTable from '../components/DataTable';
-import ActivityHeatmap from '../components/ActivityHeatmap';
-import Badge from '../components/Badge';
-import { mockFacultyUser, mockFacultyStats, mockFacultyActivity, mockFacultyCourses } from '../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import StatTile from '@/app/components/StatTile';
+import CourseCard from '@/app/components/CourseCard';
+import DataTable from '@/app/components/DataTable';
+import ActivityHeatmap from '@/app/components/ActivityHeatmap';
+import Badge from '@/app/components/Badge';
+import { mockFacultyUser, mockFacultyStats, mockFacultyActivity, mockFacultyCourses } from '@/lib/mockData';
 import styles from './Faculty.module.css';
 
 export default function FacultyDashboard() {

@@ -37,22 +37,12 @@ def sanitize_id(id_str: str) -> str:
     return sanitized[:MAX_SESSION_ID_LENGTH]
 
 def validate_id(id_str: str) -> bool:
-    """
-    Validates that an ID string is safe and follows expected patterns.
-    Returns True if valid, raises ValueError with a clear message if not.
-    """
     if not id_str:
         raise ValueError("ID cannot be empty")
-    
     if len(id_str) > MAX_SESSION_ID_LENGTH:
         raise ValueError(f"ID exceeds maximum length of {MAX_SESSION_ID_LENGTH}")
-    
-    if id_str.startswith(".") or id_str.startswith("_"):
-         raise ValueError("ID cannot start with a dot or underscore.")
-
     if not SAFE_ID_PATTERN.match(id_str):
         raise ValueError("ID contains invalid characters. Only alphanumeric, underscores, and hyphens are allowed.")
-         
     return True
 
 def validate_course_code(course_code: str) -> str:

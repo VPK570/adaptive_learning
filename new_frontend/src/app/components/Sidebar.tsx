@@ -7,10 +7,10 @@ export default function Sidebar({ navRole, activeNavKey, isOpen, onClose }) {
   // navRole: "student" | "faculty" | "admin"
   
   const navItems = [
-    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: navRole === 'admin' ? '/admin' : navRole === 'faculty' ? '/faculty' : '/dashboard' },
-    { key: 'courses', label: 'My Courses', icon: BookOpen, href: navRole === 'faculty' ? '/faculty' : '/dashboard' }, // simplified generic routes for now
-    { key: 'ai-assistant', label: 'AI Assistant', icon: Bot, href: '/chat' },
-    { key: 'progress', label: 'Progress', icon: Activity, href: '/progress' },
+    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: navRole === 'admin' ? '/admin/dashboard' : navRole === 'faculty' ? '/faculty/dashboard' : '/student/dashboard' },
+    { key: 'courses', label: 'My Courses', icon: BookOpen, href: navRole === 'faculty' ? '/faculty/dashboard' : '/student/dashboard' }, // simplified generic routes for now
+    { key: 'ai-assistant', label: 'AI Assistant', icon: Bot, href: '/student/chat' },
+    { key: 'progress', label: 'Progress', icon: Activity, href: '/student/progress' },
     { key: 'analytics', label: 'Analytics', icon: BarChart2, href: '/faculty/analytics' },
   ];
 

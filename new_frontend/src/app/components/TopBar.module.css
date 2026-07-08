@@ -169,3 +169,13 @@
     display: flex;
   }
 }
+
+.profileLink {
+  display: inline-block;
+  border-radius: var(--radius-full);
+}
+
+.profileLink:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
