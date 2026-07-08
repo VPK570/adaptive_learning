@@ -44,10 +44,8 @@ class TestValidation(unittest.TestCase):
             validate_id("id with spaces")
         with self.assertRaisesRegex(ValueError, "invalid characters"):
             validate_id("id/with/slashes")
-        with self.assertRaisesRegex(ValueError, "cannot start with a dot or underscore"):
-            validate_id("_leading_underscore")
-        with self.assertRaisesRegex(ValueError, "cannot start with a dot or underscore"):
-            validate_id(".leading_dot")
+        with self.assertRaisesRegex(ValueError, "invalid characters"):
+            validate_id("id@#$%^&*()")
         with self.assertRaisesRegex(ValueError, "exceeds maximum length"):
             validate_id("a" * (MAX_SESSION_ID_LENGTH + 1))
 

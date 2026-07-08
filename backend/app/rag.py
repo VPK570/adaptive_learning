@@ -1,8 +1,18 @@
+import hashlib
 from typing import Any
 from app.config import settings
 from app.chunker import chunk_text, clean_text
 from app.openrouter import client
 from app.db import get_db
+
+
+def calculate_file_hash(filepath: str) -> str:
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
 
 class RAGPipeline:
     def __init__(self):
@@ -128,14 +138,6 @@ class RAGPipeline:
             "document_title": document_title,
         }
 
-    async def _calculate_hash(self, filepath: str) -> str:
-        import hashlib
-        sha256_hash = hashlib.sha256()
-        with open(filepath, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-
     async def ingest_pdf(
         self,
         course_code: str,
@@ -145,7 +147,7 @@ class RAGPipeline:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         db = await get_db()
-        content_hash = await self._calculate_hash(filepath)
+        content_hash = calculate_file_hash(filepath)
         
         # Check if already ingested
         existing = await db.query(

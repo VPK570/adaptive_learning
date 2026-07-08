@@ -3,28 +3,19 @@ from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
 from app.db import get_db
 
 class SavedContentManager:
-    async def save_flashcards(self, course_code, topic, cards):
-        course_code = validate_course_code(course_code)
-        topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
-        
+    async def _save(self, table: str, data: dict):
         db = await get_db()
-        new_set = {
-            "course_code": course_code,
-            "topic": topic,
-            "cards": cards,
-            "created_at": datetime.now().isoformat()
-        }
-        res = await db.query("CREATE flashcard_set CONTENT $content", {"content": new_set})
+        res = await db.query(f"CREATE {table} CONTENT $content", {"content": data})
         if res and res[0]["result"]:
             item = res[0]["result"][0]
             item["id"] = str(item["id"])
             return item
-        return new_set
+        return data
 
-    async def get_saved_flashcards(self, course_code):
+    async def _get_all(self, table: str, course_code: str):
         course_code = validate_course_code(course_code)
         db = await get_db()
-        res = await db.query("SELECT * FROM flashcard_set WHERE course_code = $code ORDER BY created_at DESC", {"code": course_code})
+        res = await db.query(f"SELECT * FROM {table} WHERE course_code = $code ORDER BY created_at DESC", {"code": course_code})
         if res and res[0]["result"]:
             results = res[0]["result"]
             for r in results:
@@ -32,55 +23,41 @@ class SavedContentManager:
             return results
         return []
 
-    async def delete_flashcards(self, set_id):
-        # If it's a full record ID like "flashcard_set:id", extract the id part for validation
-        id_part = set_id.split(":")[-1] if ":" in set_id else set_id
+    async def _delete(self, table: str, item_id: str):
+        id_part = item_id.split(":")[-1] if ":" in item_id else item_id
         validate_id(id_part)
-        
         db = await get_db()
-        if ":" not in set_id:
-            set_id = f"flashcard_set:{set_id}"
-            
-        res = await db.query("DELETE $id", {"id": set_id})
+        if ":" not in item_id:
+            item_id = f"{table}:{item_id}"
+        res = await db.query("DELETE $id", {"id": item_id})
         return bool(res and res[0]["status"] == "OK")
 
+    async def save_flashcards(self, course_code, topic, cards):
+        return await self._save("flashcard_set", {
+            "course_code": validate_course_code(course_code),
+            "topic": sanitize_text(topic, MAX_TOPIC_LENGTH),
+            "cards": cards,
+            "created_at": datetime.now().isoformat(),
+        })
+
+    async def get_saved_flashcards(self, course_code):
+        return await self._get_all("flashcard_set", course_code)
+
+    async def delete_flashcards(self, set_id):
+        return await self._delete("flashcard_set", set_id)
+
     async def save_quiz(self, course_code, topic, questions, score):
-        course_code = validate_course_code(course_code)
-        topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
-        
-        db = await get_db()
-        new_quiz = {
-            "course_code": course_code,
-            "topic": topic,
+        return await self._save("quiz", {
+            "course_code": validate_course_code(course_code),
+            "topic": sanitize_text(topic, MAX_TOPIC_LENGTH),
             "questions": questions,
             "score": score,
             "total": len(questions),
-            "created_at": datetime.now().isoformat()
-        }
-        res = await db.query("CREATE quiz CONTENT $content", {"content": new_quiz})
-        if res and res[0]["result"]:
-            item = res[0]["result"][0]
-            item["id"] = str(item["id"])
-            return item
-        return new_quiz
+            "created_at": datetime.now().isoformat(),
+        })
 
     async def get_saved_quizzes(self, course_code):
-        course_code = validate_course_code(course_code)
-        db = await get_db()
-        res = await db.query("SELECT * FROM quiz WHERE course_code = $code ORDER BY created_at DESC", {"code": course_code})
-        if res and res[0]["result"]:
-            results = res[0]["result"]
-            for r in results:
-                r["id"] = str(r["id"])
-            return results
-        return []
+        return await self._get_all("quiz", course_code)
 
     async def delete_quiz(self, quiz_id):
-        id_part = quiz_id.split(":")[-1] if ":" in quiz_id else quiz_id
-        validate_id(id_part)
-        
-        db = await get_db()
-        if ":" not in quiz_id:
-            quiz_id = f"quiz:{quiz_id}"
-        res = await db.query("DELETE $id", {"id": quiz_id})
-        return bool(res and res[0]["status"] == "OK")
+        return await self._delete("quiz", quiz_id)
