@@ -1,10 +1,10 @@
 import React from 'react';
-import AppShell from '../../components/AppShell';
-import { BarChart2 } from 'lucide-react';
+import AppShell from '@/app/components/AppShell';
+import { ClipboardCheck } from 'lucide-react';
 
-export default function FacultyAnalyticsPlaceholder() {
+export default function QuizPlaceholder() {
   return (
-    <AppShell navRole="faculty" activeNavKey="analytics" topBarVariant="search">
+    <AppShell navRole="student" activeNavKey="dashboard" topBarVariant="search">
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -22,13 +22,13 @@ export default function FacultyAnalyticsPlaceholder() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--color-primary)'
+          color: 'var(--color-tertiary)'
         }}>
-          <BarChart2 size={40} />
+          <ClipboardCheck size={40} />
         </div>
-        <h1 style={{ font: 'var(--text-display-sm)', color: 'var(--color-on-background)' }}>Faculty Analytics</h1>
+        <h1 style={{ font: 'var(--text-display-sm)', color: 'var(--color-on-background)' }}>Practice Quizzes</h1>
         <p style={{ font: 'var(--text-body-lg)', color: 'var(--color-on-surface-variant)', maxWidth: 400 }}>
-          Detailed engagement analytics, student performance breakdowns, and AI usage insights. Coming soon.
+          Adaptive quizzes tailored to your learning gaps. This feature is under development.
         </p>
       </div>
     </AppShell>

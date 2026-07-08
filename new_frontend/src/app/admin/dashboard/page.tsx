@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import AppShell from '../components/AppShell';
-import StatTile from '../components/StatTile';
-import DataTable from '../components/DataTable';
-import MiniBarChart from '../components/MiniBarChart';
-import Badge from '../components/Badge';
-import AvatarOrInitials from '../components/AvatarOrInitials';
-import { mockAdminUser, adminStats, adminUsers, platformActivity, recentSignups } from '../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import StatTile from '@/app/components/StatTile';
+import DataTable from '@/app/components/DataTable';
+import MiniBarChart from '@/app/components/MiniBarChart';
+import Badge from '@/app/components/Badge';
+import AvatarOrInitials from '@/app/components/AvatarOrInitials';
+import { mockAdminUser, adminStats, adminUsers, platformActivity, recentSignups } from '@/lib/mockData';
 import styles from './Admin.module.css';
 
 export default function AdminDashboard() {

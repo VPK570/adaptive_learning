@@ -2,7 +2,7 @@ import React from 'react';
 import { User } from 'lucide-react';
 import styles from './AvatarOrInitials.module.css';
 
-export default function AvatarOrInitials({ name, avatarUrl, initials, role }) {
+export default function AvatarOrInitials({ name, avatarUrl, initials, role }: { name?: any, avatarUrl?: any, initials?: any, role?: any }) {
   const getInitials = (nameStr) => {
     if (!nameStr) return '?';
     const parts = nameStr.split(' ');

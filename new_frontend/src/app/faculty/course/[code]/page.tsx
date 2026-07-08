@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, CheckCircle, FileText, ArrowRight } from 'lucide-react';
-import AppShell from '../../../../components/AppShell';
-import Dropzone from '../../../../components/Dropzone';
-import FileTypeIcon from '../../../../components/FileTypeIcon';
-import Badge from '../../../../components/Badge';
-import ProgressBar from '../../../../components/ProgressBar';
-import { mockFacultyUser } from '../../../../../lib/mockData';
+import AppShell from '@/app/components/AppShell';
+import Dropzone from '@/app/components/Dropzone';
+import FileTypeIcon from '@/app/components/FileTypeIcon';
+import Badge from '@/app/components/Badge';
+import ProgressBar from '@/app/components/ProgressBar';
+import { mockFacultyUser } from '@/lib/mockData';
 import styles from './UploadMaterials.module.css';
 
 export default function UploadMaterials({ params }) {
@@ -16,7 +16,7 @@ export default function UploadMaterials({ params }) {
   const courseCode = params.code || 'CS-301';
   
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/faculty' },
+    { label: 'Dashboard', href: '/faculty/dashboard' },
     { label: courseCode }
   ];
 

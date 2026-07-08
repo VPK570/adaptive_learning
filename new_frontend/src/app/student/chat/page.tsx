@@ -1,5 +1,5 @@
 import React from 'react';
-import AppShell from '../components/AppShell';
+import AppShell from '@/app/components/AppShell';
 import { Bot } from 'lucide-react';
 
 export default function ChatPlaceholder() {
