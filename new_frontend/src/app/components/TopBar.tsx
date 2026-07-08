@@ -1,6 +1,9 @@
+"use client";
+
 import React from 'react';
 import { Menu, Search, Bell, History, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import AvatarOrInitials from './AvatarOrInitials';
 import Breadcrumbs from './Breadcrumbs';
 import styles from './TopBar.module.css';
@@ -15,7 +18,10 @@ export default function TopBar({
   breadcrumbs = [],
   onBack
 }) {
-  // variant: "search" | "tabs" | "breadcrumbBack"
+  const pathname = usePathname();
+  const roleMatch = pathname ? pathname.match(/^\/(student|faculty|admin)/) : null;
+  const role = roleMatch ? roleMatch[1] : 'student';
+  const profileUrl = `/${role}/profile`;
 
   return (
     <header className={styles.topBar}>
@@ -73,11 +79,13 @@ export default function TopBar({
         </button>
         
         <div className={styles.avatarContainer}>
-          <AvatarOrInitials 
-            name={user?.name || 'User'} 
-            avatarUrl={user?.avatarUrl} 
-            initials={user?.initials}
-          />
+          <Link href={profileUrl} className={styles.profileLink} aria-label="View profile">
+            <AvatarOrInitials 
+              name={user?.name || 'User'} 
+              avatarUrl={user?.avatarUrl} 
+              initials={user?.initials}
+            />
+          </Link>
         </div>
       </div>
     </header>
