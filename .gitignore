@@ -60,3 +60,6 @@ build/
 saved_flashcards.json.bak
 saved_quizzes.json.bak
 chat_history.json.bak
+
+# Git worktrees
+/.worktrees/
