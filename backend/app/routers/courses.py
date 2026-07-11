@@ -10,6 +10,19 @@ from app.courses import get_all_courses_data, create_course, update_course, dele
 router = APIRouter()
 
 
+@router.get("/courses/{course_code}")
+async def get_course(course_code: str, rag: RAGPipeline = Depends(get_rag)):
+    course_code = validate_course_code(course_code)
+    courses = await get_all_courses_data()
+    course = next((c for c in courses if c["course_code"] == course_code), None)
+    if not course:
+        raise HTTPException(404, f"Course {course_code} not found")
+    stats = await rag.get_course_stats(course_code)
+    course["doc_count"] = len(stats.get("documents", []))
+    course["chunk_count"] = stats.get("total_chunks", 0)
+    return course
+
+
 @router.get("/courses")
 async def list_courses(rag: RAGPipeline = Depends(get_rag)):
     courses = await get_all_courses_data()

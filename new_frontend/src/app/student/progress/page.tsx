@@ -1,19 +1,59 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect, useState } from 'react';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
 import ProgressBar from '@/app/components/ProgressBar';
-import ActivityHeatmap from '@/app/components/ActivityHeatmap';
 import Badge from '@/app/components/Badge';
-import { mockStudentUser, progressStats, topicsBreakdown, recommendedRevision } from '@/lib/mockData';
+import { coursesApi } from '@/lib/api/courses';
+import { analyticsApi } from '@/lib/api/analytics';
+import type { Course, Analytics } from '@/lib/api/types';
 import styles from './Progress.module.css';
 
 export default function LearningProgress() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [weakTopics, setWeakTopics] = useState<string[]>([]);
+  const [revisionItems, setRevisionItems] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    coursesApi.list()
+      .then(async (list) => {
+        if (controller.signal.aborted) return;
+        setCourses(list);
+        const topics: string[] = [];
+        const revisions: string[] = [];
+        await Promise.all(list.map(c =>
+          analyticsApi.get(c.course_code)
+            .then((data: Analytics) => {
+              if (controller.signal.aborted) return;
+              if (data?.weak_topics) topics.push(...data.weak_topics);
+              if (data?.suggested_revision) revisions.push(...data.suggested_revision);
+            })
+            .catch(() => {})
+        ));
+        if (!controller.signal.aborted) {
+          setWeakTopics([...new Set(topics)]);
+          setRevisionItems([...new Set(revisions)]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, []);
+
+  const statTiles = [
+    { icon: 'Award', value: '—', label: 'Overall Mastery', accent: 'primary' as const },
+    { icon: 'Clock', value: '—', label: 'Study Time', accent: 'secondary' as const },
+    { icon: 'BookOpen', value: String(courses.length || '—'), label: 'Courses Enrolled', accent: 'tertiary' as const },
+  ];
+
   return (
     <AppShell
       navRole="student"
       activeNavKey="progress"
       topBarVariant="search"
-      user={mockStudentUser}
     >
       <div className={styles.container}>
         <header className={styles.header}>
@@ -22,66 +62,63 @@ export default function LearningProgress() {
         </header>
 
         <section className={styles.statsRow}>
-          {progressStats.map((stat, i) => (
-            <StatTile
-              key={i}
-              iconName={stat.icon}
-              value={stat.value}
-              label={stat.label}
-              trend={stat.trend}
-              caption={stat.caption}
-              accent={i === 0 ? 'primary' : i === 1 ? 'secondary' : 'tertiary'}
-            />
+          {statTiles.map((stat, i) => (
+            <StatTile key={i} iconName={stat.icon} value={stat.value} label={stat.label} accent={stat.accent} />
           ))}
         </section>
 
         <section className={styles.middleRow}>
           <div className={styles.topicsColumn}>
-            <h2 className={styles.sectionTitle}>Topics Breakdown</h2>
-            <div className={styles.topicsList}>
-              {topicsBreakdown.map((topic, i) => (
-                <div key={i} className={styles.topicItem}>
-                  <div className={styles.topicHeader}>
-                    <span className={styles.topicName}>{topic.topic}</span>
-                    <span className={styles.topicPercent}>{topic.percent}%</span>
-                  </div>
-                  <ProgressBar percent={topic.percent} intensity={topic.intensity} />
-                </div>
-              ))}
-            </div>
+            <h2 className={styles.sectionTitle}>Weak Topics</h2>
+            {loading ? (
+              <p>Loading...</p>
+            ) : (
+              <div className={styles.topicsList}>
+                {weakTopics.length === 0 ? (
+                  <p>No weak topics identified yet. Ask questions in your courses.</p>
+                ) : (
+                  weakTopics.map((topic, i) => (
+                    <div key={i} className={styles.topicItem}>
+                      <div className={styles.topicHeader}>
+                        <span className={styles.topicName}>{topic}</span>
+                        <span className={styles.topicPercent}>needs review</span>
+                      </div>
+                      <ProgressBar percent={30} intensity={2} />
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <div className={styles.heatmapColumn}>
             <h2 className={styles.sectionTitle}>Study Activity</h2>
             <div className={styles.heatmapCard}>
-              <ActivityHeatmap rows={5} cols={7} />
-              <div className={styles.heatmapStats}>
-                <div className={styles.heatmapStat}>
-                  <span className={styles.heatmapValue}>23</span>
-                  <span className={styles.heatmapLabel}>Active Days</span>
-                </div>
-                <div className={styles.heatmapStat}>
-                  <span className={styles.heatmapValue}>14</span>
-                  <span className={styles.heatmapLabel}>Day Streak</span>
-                </div>
-              </div>
+              <p>Study activity tracking coming soon.</p>
             </div>
           </div>
         </section>
 
         <section className={styles.revisionSection}>
           <h2 className={styles.sectionTitle}>Recommended for Revision</h2>
-          <div className={styles.revisionGrid}>
-            {recommendedRevision.map((item, i) => (
-              <div key={i} className={styles.revisionCard}>
-                <div className={styles.revisionContent}>
-                  <h3 className={styles.revisionTitle}>{item.title}</h3>
-                  <p className={styles.revisionNote}>{item.note}</p>
-                </div>
-                <Badge variant="outline-pill">Review</Badge>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <p>Loading...</p>
+          ) : (
+            <div className={styles.revisionGrid}>
+              {revisionItems.length === 0 ? (
+                <p>No revision suggestions yet.</p>
+              ) : (
+                revisionItems.map((item, i) => (
+                  <div key={i} className={styles.revisionCard}>
+                    <div className={styles.revisionContent}>
+                      <p className={styles.revisionNote}>{item}</p>
+                    </div>
+                    <Badge variant="outline-pill">Review</Badge>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </section>
       </div>
     </AppShell>

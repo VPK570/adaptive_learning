@@ -1,54 +1,95 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { UploadCloud, CheckCircle, FileText, ArrowRight } from 'lucide-react';
+import { CheckCircle, FileText, ArrowRight, Upload } from 'lucide-react';
 import AppShell from '@/app/components/AppShell';
 import Dropzone from '@/app/components/Dropzone';
 import FileTypeIcon from '@/app/components/FileTypeIcon';
 import Badge from '@/app/components/Badge';
 import ProgressBar from '@/app/components/ProgressBar';
-import { mockFacultyUser } from '@/lib/mockData';
+import { ingestionApi } from '@/lib/api/ingestion';
+import { coursesApi } from '@/lib/api/courses';
 import styles from './UploadMaterials.module.css';
 
-export default function UploadMaterials({ params }) {
+interface UploadFile {
+  id: number;
+  name: string;
+  status: 'uploading' | 'processing' | 'ready' | 'error';
+  size: string;
+  progress: number;
+  result?: { chunks?: number; tokens?: number };
+}
+
+export default function UploadMaterials({ params }: { params: { code: string } }) {
   const router = useRouter();
-  const courseCode = params.code || 'CS-301';
-  
+  const courseCode = params.code || '';
+  const [files, setFiles] = useState<UploadFile[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!courseCode) return;
+    const controller = new AbortController();
+    coursesApi.get(courseCode)
+      .then(() => {})
+      .catch(() => {});
+    // ponytail: curriculum listing uses coursesApi.getTopics — doesn't return file names;
+    // skip pre-populating file list for now, files appear after upload
+    if (!controller.signal.aborted) setLoading(false);
+    return () => controller.abort();
+  }, [courseCode]);
+
+  const handleDrop = useCallback((newFiles: File[]) => {
+    newFiles.forEach((file) => {
+      const fileId = Date.now() + Math.random();
+      const newFile: UploadFile = {
+        id: fileId,
+        name: file.name,
+        status: 'uploading',
+        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        progress: 0,
+      };
+      setFiles(prev => [...prev, newFile]);
+      setSelectedFileId(fileId);
+
+      ingestionApi.ingestPdf(
+        file,
+        courseCode,
+        '',
+        (pct) => {
+          setFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, progress: pct } : f
+          ));
+        },
+      )
+        .then((result) => {
+          setFiles(prev => prev.map(f =>
+            f.id === fileId
+              ? { ...f, status: 'ready', progress: 100, result: { chunks: result?.chunks || result?.total_chunks, tokens: result?.tokens } }
+              : f
+          ));
+        })
+        .catch(() => {
+          setFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
+          ));
+        });
+    });
+  }, [courseCode]);
+
   const breadcrumbs = [
     { label: 'Dashboard', href: '/faculty/dashboard' },
     { label: courseCode }
   ];
 
-  const [files, setFiles] = useState([
-    { id: 1, name: 'Syllabus_Fall.pdf', status: 'ready', size: '2.4 MB' },
-    { id: 2, name: 'Lecture_1_Intro.pdf', status: 'processing', size: '5.1 MB', progress: 45 },
-  ]);
-
-  const [selectedFileId, setSelectedFileId] = useState(2);
-
-  const handleDrop = (newFiles) => {
-    const addedFiles = newFiles.map((f, i) => ({
-      id: Date.now() + i,
-      name: f.name,
-      status: 'processing',
-      size: `${(f.size / (1024 * 1024)).toFixed(1)} MB`,
-      progress: 0
-    }));
-    setFiles([...files, ...addedFiles]);
-    setSelectedFileId(addedFiles[0].id);
-  };
-
-  const selectedFile = files.find(f => f.id === selectedFileId);
-
   return (
-    <AppShell 
-      navRole="faculty" 
-      activeNavKey="courses" 
+    <AppShell
+      navRole="faculty"
+      activeNavKey="courses"
       topBarVariant="breadcrumbBack"
       breadcrumbs={breadcrumbs}
       onBack={() => router.back()}
-      user={mockFacultyUser}
     >
       <div className={styles.container}>
         <header className={styles.header}>
@@ -59,26 +100,29 @@ export default function UploadMaterials({ params }) {
         </header>
 
         <div className={styles.layout}>
-          {/* Left Panel */}
           <div className={styles.leftPanel}>
             <Dropzone onDrop={handleDrop} />
-            
+
             <div className={styles.fileListSection}>
               <h3 className={styles.sectionTitle}>Uploaded Resources ({files.length})</h3>
               <div className={styles.fileList}>
                 {files.map(file => (
-                  <button 
-                    key={file.id} 
+                  <button
+                    key={file.id}
                     className={`${styles.fileItem} ${selectedFileId === file.id ? styles.selectedFile : ''}`}
                     onClick={() => setSelectedFileId(file.id)}
                   >
-                    <FileTypeIcon filename={file.name} isProcessing={file.status === 'processing'} />
+                    <FileTypeIcon filename={file.name} isProcessing={file.status !== 'ready'} />
                     <div className={styles.fileMeta}>
                       <span className={styles.fileName}>{file.name}</span>
                       <span className={styles.fileSize}>{file.size}</span>
                     </div>
                     {file.status === 'ready' ? (
                       <Badge variant="solid" color="primary">Ready</Badge>
+                    ) : file.status === 'error' ? (
+                      <Badge variant="solid" color="danger">Failed</Badge>
+                    ) : file.status === 'uploading' ? (
+                      <Badge variant="pulse">{file.progress}%</Badge>
                     ) : (
                       <Badge variant="pulse">Processing</Badge>
                     )}
@@ -88,38 +132,34 @@ export default function UploadMaterials({ params }) {
             </div>
           </div>
 
-          {/* Right Panel */}
           <div className={styles.rightPanel}>
             {!selectedFile ? (
               <div className={styles.emptyState}>
-                <FileText size={48} className={styles.emptyIcon} />
-                <h3>Select a file</h3>
-                <p>Choose a file from the left to view its processing status.</p>
+                <Upload size={48} className={styles.emptyIcon} />
+                <h3>Drop files to upload</h3>
+                <p>Drag and drop PDF documents to add them to the knowledge base.</p>
               </div>
-            ) : selectedFile.status === 'processing' ? (
+            ) : selectedFile.status === 'uploading' ? (
               <div className={styles.processingState}>
                 <div className={styles.processingHeader}>
                   <FileTypeIcon filename={selectedFile.name} />
                   <div className={styles.processingMeta}>
                     <span className={styles.processingName}>{selectedFile.name}</span>
-                    <span className={styles.processingStatusText}>Extracting and vectorizing content...</span>
+                    <span className={styles.processingStatusText}>Uploading...</span>
                   </div>
                 </div>
                 <div className={styles.progressSection}>
-                  <ProgressBar percent={selectedFile.progress || 45} showGradient />
-                  <span className={styles.progressValue}>{selectedFile.progress || 45}%</span>
+                  <ProgressBar percent={selectedFile.progress} showGradient />
+                  <span className={styles.progressValue}>{selectedFile.progress}%</span>
                 </div>
-                <ul className={styles.processingSteps}>
-                  <li className={styles.stepDone}>
-                    <CheckCircle size={16} /> Text Extraction
-                  </li>
-                  <li className={styles.stepActive}>
-                    <div className={styles.spinner}></div> Chunking
-                  </li>
-                  <li className={styles.stepPending}>
-                    <div className={styles.circle}></div> Embedding Generation
-                  </li>
-                </ul>
+              </div>
+            ) : selectedFile.status === 'error' ? (
+              <div className={styles.readyCard}>
+                <div className={styles.readyHeader}>
+                  <FileText size={32} className={styles.emptyIcon} />
+                  <h2>Upload Failed</h2>
+                  <p>{selectedFile.name} could not be processed. Try again.</p>
+                </div>
               </div>
             ) : (
               <div className={styles.readyCard}>
@@ -131,15 +171,15 @@ export default function UploadMaterials({ params }) {
                 <div className={styles.statsRow}>
                   <div className={styles.statMini}>
                     <span className={styles.statLabel}>Chunks</span>
-                    <span className={styles.statValue}>142</span>
+                    <span className={styles.statValue}>{selectedFile.result?.chunks ?? '—'}</span>
                   </div>
                   <div className={styles.statMini}>
-                    <span className={styles.statLabel}>Tokens</span>
-                    <span className={styles.statValue}>~45k</span>
+                    <span className={styles.statLabel}>Status</span>
+                    <span className={styles.statValue}>Ready</span>
                   </div>
                 </div>
                 <div className={styles.actions}>
-                  <button 
+                  <button
                     className={styles.primaryBtn}
                     onClick={() => router.push('/faculty/generate')}
                   >

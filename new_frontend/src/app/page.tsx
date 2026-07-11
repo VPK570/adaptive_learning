@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from "next/navigation";
-import { login } from '@/lib/api';
+import { useAuthStore } from '@/lib/store/authStore';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
@@ -11,7 +11,16 @@ export default function Home() {
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [serverError, setServerError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { isAuthenticated, user, login: storeLogin } = useAuthStore();
   const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === 'faculty') router.replace('/faculty/dashboard');
+      else if (user.role === 'admin') router.replace('/admin/dashboard');
+      else router.replace('/student/dashboard');
+    }
+  }, [isAuthenticated, user, router]);
 
   const tabs = ['Student', 'Faculty', 'Admin'];
   const roleMap = { Student: 'student', Faculty: 'faculty', Admin: 'admin' };
@@ -50,17 +59,16 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const data = await login(email, password);
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('role', data.role);
-
       const selectedRole = roleMap[tabs[activeTab]];
-      if (selectedRole === 'faculty' || data.role === 'faculty') {
-        router.push('/faculty');
-      } else if (data.role === 'admin') {
-        router.push('/admin');
+      await storeLogin(email, password);
+
+      const redirectRole = selectedRole;
+      if (redirectRole === 'faculty') {
+        router.push('/faculty/dashboard');
+      } else if (redirectRole === 'admin') {
+        router.push('/admin/dashboard');
       } else {
-        router.push('/dashboard');
+        router.push('/student/dashboard');
       }
     } catch (err) {
       setServerError(err.message || 'Login failed. Please try again.');

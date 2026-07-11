@@ -1,10 +1,9 @@
-version: "3.9"
-
 services:
   surrealdb:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
-    command: start --user root --pass root file://data/surrealdb.db
+    user: root
+    command: start --user root --pass root surrealkv://data/surrealdb.db
     ports:
       - "8000:8000"
     volumes:
@@ -36,7 +35,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./new_frontend
       dockerfile: Dockerfile
     ports:
       - "3000:3000"

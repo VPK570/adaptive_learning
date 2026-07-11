@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import styles from './AppShell.module.css';
+import { useAuthStore } from '@/lib/store/authStore';
 
 export default function AppShell({ 
   children, 
@@ -18,6 +19,8 @@ export default function AppShell({
   onBack
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const storeUser = useAuthStore((s) => s.user);
+  const activeUser = user?.name ? user : storeUser ?? { name: 'User', initials: 'U' };
 
   return (
     <div className={styles.appContainer}>
@@ -32,7 +35,7 @@ export default function AppShell({
         <TopBar 
           variant={topBarVariant}
           onMenuClick={() => setIsMobileMenuOpen(true)}
-          user={user}
+          user={activeUser}
           tabs={tabs}
           activeTab={activeTab}
           onTabChange={onTabChange}
