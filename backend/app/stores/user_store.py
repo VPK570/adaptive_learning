@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,3 +29,13 @@ class UserStore:
         except IntegrityError:
             raise ValueError(f"User with email {email} already exists")
         return user
+
+    async def get_all(self) -> list[User]:
+        result = await self.session.execute(
+            select(User).order_by(User.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def count(self) -> int:
+        result = await self.session.execute(select(func.count(User.id)))
+        return result.scalar() or 0

@@ -1,26 +1,35 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
 import CourseCard from '@/app/components/CourseCard';
 import { coursesApi } from '@/lib/api/courses';
 import type { Course } from '@/lib/api/types';
+import AddCourseModal from './AddCourseModal';
+import { Plus } from 'lucide-react';
 import styles from './Faculty.module.css';
 
 export default function FacultyDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  useEffect(() => {
+  const fetchCourses = useCallback(() => {
     const controller = new AbortController();
+    setLoading(true);
     coursesApi.list()
       .then(data => { if (!controller.signal.aborted) setCourses(data); })
       .catch(() => {})
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
+    return controller;
   }, []);
+
+  useEffect(() => {
+    const controller = fetchCourses();
+    return () => controller.abort();
+  }, [fetchCourses]);
 
   const tabs = [
     { key: 'dashboard', label: 'Dashboard' },
@@ -51,6 +60,12 @@ export default function FacultyDashboard() {
             <h1 className={styles.greeting}>Faculty Dashboard</h1>
             <p className={styles.subtitle}>Overview of your courses and materials.</p>
           </div>
+          <div className={styles.headerActions}>
+            <button className={styles.addBtn} onClick={() => setShowAddModal(true)}>
+              <Plus size={18} />
+              Add Course
+            </button>
+          </div>
         </header>
 
         <section className={styles.statsRow}>
@@ -72,6 +87,12 @@ export default function FacultyDashboard() {
           )}
         </section>
       </div>
+
+      <AddCourseModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={() => fetchCourses()}
+      />
     </AppShell>
   );
 }

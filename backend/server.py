@@ -24,7 +24,7 @@ from app.curriculum import CurriculumManager
 from app.saved_content import SavedContentManager
 from app.validation import MAX_FILE_SIZE
 from app.auth import decode_token
-from app.routers import ingestion, query, courses, analytics, chat, flashcards, quiz, paper, auth as auth_routes
+from app.routers import admin as admin_routes, ingestion, query, courses, analytics, chat, flashcards, quiz, paper, auth as auth_routes
 from app.routers import users as users_routes
 
 logging.basicConfig(
@@ -40,6 +40,7 @@ async def seed_default_users():
     defaults = [
         ("student@test.com", "password123", "student"),
         ("faculty@test.com", "password123", "faculty"),
+        ("admin@test.com", "password123", "admin"),
     ]
     async with Database.session() as session:
         store = UserStore(session)
@@ -125,6 +126,7 @@ app.include_router(quiz.router)
 app.include_router(paper.router)
 app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
+app.include_router(admin_routes.router)
 
 if __name__ == "__main__":
     import uvicorn

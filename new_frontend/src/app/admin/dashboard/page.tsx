@@ -1,29 +1,50 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
 import DataTable from '@/app/components/DataTable';
-import MiniBarChart from '@/app/components/MiniBarChart';
 import Badge from '@/app/components/Badge';
 import AvatarOrInitials from '@/app/components/AvatarOrInitials';
-import { mockAdminUser, adminStats, adminUsers, platformActivity, recentSignups } from '@/lib/mockData';
+import { adminApi, type AdminUser, type AdminStats } from '@/lib/api/admin';
+import { useAuthStore } from '@/lib/store/authStore';
 import styles from './Admin.module.css';
 
 export default function AdminDashboard() {
+  const user = useAuthStore(s => s.user);
   const [activeTab, setActiveTab] = useState('overview');
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const c = new AbortController();
+    Promise.all([
+      adminApi.getStats(),
+      adminApi.listUsers(),
+    ])
+      .then(([s, u]) => { if (!c.signal.aborted) { setStats(s); setUsers(u); } })
+      .catch(() => { if (!c.signal.aborted) {} })
+      .finally(() => { if (!c.signal.aborted) setLoading(false); });
+    return () => c.abort();
+  }, []);
 
   const tabs = [
     { key: 'overview', label: 'Overview' },
     { key: 'users', label: 'Users' },
-    { key: 'courses', label: 'Courses' }
   ];
+
+  const statTiles = stats ? [
+    { icon: 'Users', value: String(stats.total_users), label: 'Total Users', accent: 'primary', trend: '' },
+    { icon: 'Library', value: String(stats.total_courses), label: 'Total Courses', accent: 'tertiary', trend: '' },
+    { icon: 'FileText', value: String(stats.total_documents), label: 'Docs Processed', accent: 'secondary', trend: '' },
+    { icon: 'MessagesSquare', value: String(stats.total_conversations), label: 'AI Conversations', accent: 'primary-container', trend: '' },
+  ] : [];
 
   const userColumns = [
     {
-      key: 'name',
-      label: 'User',
-      render: (val, row) => (
+      key: 'name', label: 'User',
+      render: (val: string, row: AdminUser) => (
         <div className={styles.userCell}>
           <AvatarOrInitials name={row.name} />
           <div className={styles.userInfo}>
@@ -31,22 +52,20 @@ export default function AdminDashboard() {
             <span className={styles.userEmail}>{row.email}</span>
           </div>
         </div>
-      )
+      ),
     },
     {
-      key: 'role',
-      label: 'Role',
-      render: (val) => <Badge variant="role" color={val}>{val}</Badge>
+      key: 'role', label: 'Role',
+      render: (val: string) => <Badge variant="role" color={val}>{val}</Badge>,
     },
     {
-      key: 'status',
-      label: 'Status',
-      render: (val) => (
+      key: 'status', label: 'Status',
+      render: (val: string) => (
         <span className={`${styles.statusDot} ${val === 'active' ? styles.active : styles.offline}`}>
           {val}
         </span>
-      )
-    }
+      ),
+    },
   ];
 
   return (
@@ -57,7 +76,7 @@ export default function AdminDashboard() {
       tabs={tabs}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      user={mockAdminUser}
+      user={user ?? undefined}
     >
       <div className={styles.container}>
         <header className={styles.header}>
@@ -65,53 +84,41 @@ export default function AdminDashboard() {
           <p className={styles.pageSubtitle}>Platform health, user management, and analytics overview.</p>
         </header>
 
-        <section className={styles.statsRow}>
-          {adminStats.map((stat, i) => (
-            <StatTile
-              key={i}
-              iconName={stat.icon}
-              value={stat.value}
-              label={stat.label}
-              trend={stat.trend}
-              accent={stat.accent}
+        {activeTab === 'overview' && (
+          <>
+            <section className={styles.statsRow}>
+              {loading ? (
+                <p>Loading...</p>
+              ) : (
+                statTiles.map((s, i) => (
+                  <StatTile key={i} iconName={s.icon} value={s.value} label={s.label} trend={s.trend} accent={s.accent} />
+                ))
+              )}
+            </section>
+
+            {!loading && (
+              <section className={styles.usersSection}>
+                <h2 className={styles.sectionTitle}>All Users</h2>
+                <DataTable
+                  columns={userColumns}
+                  data={users}
+                  onViewAll={() => setActiveTab('users')}
+                  viewAllLabel="View All Users"
+                />
+              </section>
+            )}
+          </>
+        )}
+
+        {activeTab === 'users' && (
+          <section className={styles.usersSection}>
+            <h2 className={styles.sectionTitle}>All Users</h2>
+            <DataTable
+              columns={userColumns}
+              data={users}
             />
-          ))}
-        </section>
-
-        <section className={styles.middleRow}>
-          <div className={styles.chartColumn}>
-            <h2 className={styles.sectionTitle}>Platform Activity (7d)</h2>
-            <div className={styles.chartWrapper}>
-              <MiniBarChart data={platformActivity} />
-            </div>
-          </div>
-
-          <div className={styles.signupsColumn}>
-            <h2 className={styles.sectionTitle}>Recent Sign-ups</h2>
-            <div className={styles.signupsList}>
-              {recentSignups.map((person, i) => (
-                <div key={i} className={styles.signupItem}>
-                  <AvatarOrInitials name={person.name} avatarUrl={person.avatarUrl} initials={person.initials} />
-                  <div className={styles.signupInfo}>
-                    <span className={styles.signupName}>{person.name}</span>
-                    <span className={styles.signupTime}>{person.time}</span>
-                  </div>
-                  <Badge variant="role" color={person.role}>{person.role}</Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className={styles.usersSection}>
-          <h2 className={styles.sectionTitle}>All Users</h2>
-          <DataTable
-            columns={userColumns}
-            data={adminUsers}
-            onViewAll={() => console.log('View all users')}
-            viewAllLabel="View All Users"
-          />
-        </section>
+          </section>
+        )}
       </div>
     </AppShell>
   );
