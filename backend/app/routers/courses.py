@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 
+from app.auth import require_role
 from app.deps import get_rag, get_curriculum
 from app.rag import RAGPipeline
 from app.curriculum import CurriculumManager
@@ -35,7 +36,7 @@ async def list_courses(rag: RAGPipeline = Depends(get_rag)):
 
 
 @router.post("/courses")
-async def create_new_course(body: CourseCreate):
+async def create_new_course(body: CourseCreate, _=Depends(require_role("faculty", "admin"))):
     try:
         course_code = validate_course_code(body.course_code)
         new_course = await create_course(
@@ -47,7 +48,7 @@ async def create_new_course(body: CourseCreate):
 
 
 @router.put("/courses/{course_code}")
-async def edit_course(course_code: str, body: CourseUpdate):
+async def edit_course(course_code: str, body: CourseUpdate, _=Depends(require_role("faculty", "admin"))):
     try:
         course_code = validate_course_code(course_code)
         updated = await update_course(
@@ -59,7 +60,7 @@ async def edit_course(course_code: str, body: CourseUpdate):
 
 
 @router.delete("/courses/{course_code}")
-async def remove_course(course_code: str):
+async def remove_course(course_code: str, _=Depends(require_role("faculty", "admin"))):
     try:
         course_code = validate_course_code(course_code)
         await delete_course(course_code)

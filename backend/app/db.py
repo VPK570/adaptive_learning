@@ -1,4 +1,4 @@
-"""SurrealDB client — vector storage only (RAG embeddings)."""
+"""SurrealDB client — primary database for all persistence."""
 import asyncio
 import logging
 from typing import Optional
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 _CONNECT_MAX_RETRIES = 5
 _CONNECT_RETRY_DELAY = 2.0
-_CONNECT_TIMEOUT = 10.0
+_CONNECT_TIMEOUT = 30.0
 
 
 class SurrealDBManager:
@@ -84,8 +84,22 @@ class SurrealDBManager:
                 cls._instance = None
 
     @classmethod
+    async def _probe_dimension(cls) -> int:
+        from app.openrouter import client
+        vector = await client.embed_text("probe")
+        dim = len(vector)
+        if not isinstance(dim, int) or dim < 64 or dim > 8192:
+            raise RuntimeError(
+                f"Embedding dimension probe returned {dim} — refusing to start. "
+                f"Model: {settings.EMBEDDING_MODEL}"
+            )
+        logger.info("Embedding dimension probe: %d (model: %s)", dim, settings.EMBEDDING_MODEL)
+        return dim
+
+    @classmethod
     async def _init_schema(cls, db: AsyncSurreal):
-        schema_query = """
+        dim = await cls._probe_dimension()
+        schema_query = f"""
             DEFINE TABLE IF NOT EXISTS text_chunk SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE text_chunk TYPE string;
             DEFINE FIELD IF NOT EXISTS text ON TABLE text_chunk TYPE string;
@@ -97,7 +111,7 @@ class SurrealDBManager:
 
             DEFINE ANALYZER IF NOT EXISTS chunk_analyzer TOKENIZERS blank,punct FILTERS lowercase,snowball(english);
             DEFINE INDEX IF NOT EXISTS text_search_idx ON TABLE text_chunk FIELDS text FULLTEXT ANALYZER chunk_analyzer BM25;
-            DEFINE INDEX IF NOT EXISTS text_embedding_idx ON TABLE text_chunk FIELDS embedding HNSW DIMENSION 2048 DIST COSINE;
+            DEFINE INDEX IF NOT EXISTS text_embedding_idx ON TABLE text_chunk FIELDS embedding HNSW DIMENSION {dim} DIST COSINE;
 
             DEFINE TABLE IF NOT EXISTS image_chunk SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE image_chunk TYPE string;
@@ -110,7 +124,7 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS mime_type ON TABLE image_chunk TYPE string;
             DEFINE FIELD IF NOT EXISTS image_size_kb ON TABLE image_chunk TYPE number;
 
-            DEFINE INDEX IF NOT EXISTS image_embedding_idx ON TABLE image_chunk FIELDS embedding HNSW DIMENSION 2048 DIST COSINE;
+            DEFINE INDEX IF NOT EXISTS image_embedding_idx ON TABLE image_chunk FIELDS embedding HNSW DIMENSION {dim} DIST COSINE;
 
             DEFINE TABLE IF NOT EXISTS curriculum_chunk SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE curriculum_chunk TYPE string;
@@ -121,7 +135,7 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS page ON TABLE curriculum_chunk TYPE number;
             DEFINE FIELD IF NOT EXISTS content_type ON TABLE curriculum_chunk TYPE string;
 
-            DEFINE INDEX IF NOT EXISTS curriculum_embedding_idx ON TABLE curriculum_chunk FIELDS embedding HNSW DIMENSION 2048 DIST COSINE;
+            DEFINE INDEX IF NOT EXISTS curriculum_embedding_idx ON TABLE curriculum_chunk FIELDS embedding HNSW DIMENSION {dim} DIST COSINE;
 
             DEFINE TABLE IF NOT EXISTS course SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE course TYPE string;
@@ -138,19 +152,67 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS created_at ON TABLE document TYPE string;
             DEFINE INDEX IF NOT EXISTS content_hash_idx ON TABLE document FIELDS content_hash UNIQUE;
 
+            DEFINE TABLE IF NOT EXISTS user SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS user_id ON TABLE user TYPE string;
+            DEFINE FIELD IF NOT EXISTS email ON TABLE user TYPE string;
+            DEFINE FIELD IF NOT EXISTS hashed_password ON TABLE user TYPE string;
+            DEFINE FIELD IF NOT EXISTS role ON TABLE user TYPE string;
+            DEFINE FIELD IF NOT EXISTS name ON TABLE user TYPE string;
+            DEFINE FIELD IF NOT EXISTS created_at ON TABLE user TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS user_email_idx ON TABLE user FIELDS email UNIQUE;
+            DEFINE INDEX IF NOT EXISTS user_user_id_idx ON TABLE user FIELDS user_id UNIQUE;
+
+            DEFINE TABLE IF NOT EXISTS chat_message SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS user_id ON TABLE chat_message TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE chat_message TYPE string;
+            DEFINE FIELD IF NOT EXISTS session_id ON TABLE chat_message TYPE string;
+            DEFINE FIELD IF NOT EXISTS message_role ON TABLE chat_message TYPE string;
+            DEFINE FIELD IF NOT EXISTS content ON TABLE chat_message TYPE string;
+            DEFINE FIELD IF NOT EXISTS timestamp ON TABLE chat_message TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS chat_course_session_idx ON TABLE chat_message FIELDS course_code, session_id;
+
+            DEFINE TABLE IF NOT EXISTS query_log SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS user_id ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS question ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS response_preview ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS out_of_scope ON TABLE query_log TYPE bool;
+            DEFINE FIELD IF NOT EXISTS cited_sources ON TABLE query_log TYPE array;
+            DEFINE FIELD IF NOT EXISTS timestamp ON TABLE query_log TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS query_log_course_idx ON TABLE query_log FIELDS course_code;
+
+            DEFINE TABLE IF NOT EXISTS flashcard_set SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS user_id ON TABLE flashcard_set TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE flashcard_set TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic ON TABLE flashcard_set TYPE string;
+            DEFINE FIELD IF NOT EXISTS cards ON TABLE flashcard_set TYPE any;
+            DEFINE FIELD IF NOT EXISTS created_at ON TABLE flashcard_set TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS flashcard_course_idx ON TABLE flashcard_set FIELDS course_code;
+
+            DEFINE TABLE IF NOT EXISTS quiz SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS user_id ON TABLE quiz TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE quiz TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic ON TABLE quiz TYPE string;
+            DEFINE FIELD IF NOT EXISTS questions ON TABLE quiz TYPE any;
+            DEFINE FIELD IF NOT EXISTS score ON TABLE quiz TYPE int;
+            DEFINE FIELD IF NOT EXISTS total ON TABLE quiz TYPE int;
+            DEFINE FIELD IF NOT EXISTS created_at ON TABLE quiz TYPE datetime DEFAULT time::now();
+            DEFINE FIELD IF NOT EXISTS completed_at ON TABLE quiz TYPE datetime;
+            DEFINE INDEX IF NOT EXISTS quiz_course_idx ON TABLE quiz FIELDS course_code;
+
             DEFINE INDEX IF NOT EXISTS text_chunk_course_idx ON TABLE text_chunk FIELDS course_code;
             DEFINE INDEX IF NOT EXISTS image_chunk_course_idx ON TABLE image_chunk FIELDS course_code;
             DEFINE INDEX IF NOT EXISTS curriculum_chunk_course_idx ON TABLE curriculum_chunk FIELDS course_code;
 
-            DEFINE EVENT IF NOT EXISTS course_cascade_delete ON TABLE course WHEN $event = "DELETE" THEN {
+            DEFINE EVENT IF NOT EXISTS course_cascade_delete ON TABLE course WHEN $event = "DELETE" THEN {{
                 DELETE text_chunk WHERE course_code = $before.course_code;
                 DELETE image_chunk WHERE course_code = $before.course_code;
                 DELETE curriculum_chunk WHERE course_code = $before.course_code;
-            };
+            }};
         """
         try:
             await db.query(schema_query)
-            logger.info("Schema initialized")
+            logger.info("Schema initialized (dimension=%d)", dim)
         except Exception as e:
             error_msg = str(e).lower()
             if "already exists" in error_msg or "duplicate" in error_msg:

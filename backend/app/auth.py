@@ -2,15 +2,10 @@
 
 Self-hosted JWT auth (no external provider) so user data stays on
 university infrastructure, per the project's privacy requirements.
-
-NOTE: The get_current_user dependency is provided but NOT yet attached
-to existing routes. The frontend does not send tokens yet, so arming
-routes now would break the app. To protect a route later, add:
-    user = Depends(get_current_user)
-to that route's signature.
 """
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -20,8 +15,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import settings
-from app.database import Database
-from app.stores.user_store import UserStore
+from app.db import SurrealDBManager
 
 logger = logging.getLogger(__name__)
 
@@ -70,18 +64,33 @@ def decode_token(token: str) -> dict[str, Any]:
 
 
 async def get_user_by_email(email: str) -> Optional[dict[str, Any]]:
-    async with Database.session() as session:
-        store = UserStore(session)
-        user = await store.get_by_email(email)
-        if user is None:
-            return None
-        return {
-            "id": user.id,
-            "email": user.email,
-            "hashed_password": user.hashed_password,
-            "role": user.role,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-        }
+    db = await SurrealDBManager.get_db()
+    result = await db.query(
+        "SELECT * FROM user WHERE email = $email",
+        {"email": email.lower().strip()},
+    )
+    rows = result if result else []
+    if not rows:
+        return None
+    u = rows[0]
+    return {
+        "id": u.get("user_id"),
+        "email": u.get("email"),
+        "hashed_password": u.get("hashed_password"),
+        "role": u.get("role"),
+        "created_at": str(u.get("created_at")) if u.get("created_at") else None,
+    }
+
+
+async def _create_user(email: str, hashed_password: str, role: str) -> dict[str, Any]:
+    db = await SurrealDBManager.get_db()
+    user_id = str(uuid.uuid4())
+    name = email.split("@")[0]
+    result = await db.query(
+        "CREATE user CONTENT { user_id: $uid, email: $email, hashed_password: $pw, role: $role, name: $name }",
+        {"uid": user_id, "email": email.lower().strip(), "pw": hashed_password, "role": role, "name": name},
+    )
+    return result[0]
 
 
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict[str, Any]:

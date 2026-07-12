@@ -5,11 +5,17 @@ import tiktoken
 
 
 
-_encoder = tiktoken.get_encoding("cl100k_base")
+_encoder = None
+
+def _get_encoder():
+    global _encoder
+    if _encoder is None:
+        _encoder = tiktoken.get_encoding("cl100k_base")
+    return _encoder
 
 
 def token_count(text: str) -> int:
-    return len(_encoder.encode(text))
+    return len(_get_encoder().encode(text))
 
 def chunk_text(
     text: str,

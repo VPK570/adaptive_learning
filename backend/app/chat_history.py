@@ -1,31 +1,47 @@
-from app.database import Database
-from app.stores.chat_store import ChatStore
+from app.db import SurrealDBManager
 
 
-async def get_course_history(course_code, session_id):
-    async with Database.session() as session:
-        store = ChatStore(session)
-        messages = await store.get_history(course_code, session_id)
-        return [
-            {
-                "id": str(m.id),
-                "course_code": m.course_code,
-                "session_id": m.session_id,
-                "role": m.role,
-                "content": m.content,
-                "timestamp": m.timestamp.isoformat() if m.timestamp else None,
-            }
-            for m in messages
-        ]
+async def get_course_history(course_code, session_id, user_id=None):
+    db = await SurrealDBManager.get_db()
+    params = {"code": course_code, "sid": session_id}
+    extra = ""
+    if user_id:
+        extra = " AND user_id = $uid"
+        params["uid"] = user_id
+    result = await db.query(
+        f"SELECT * FROM chat_message WHERE course_code = $code AND session_id = $sid{extra} ORDER BY timestamp ASC",
+        params,
+    )
+    rows = result if result else []
+    return [
+        {
+            "id": str(r["id"]),
+            "course_code": r["course_code"],
+            "session_id": r["session_id"],
+            "role": r["message_role"],
+            "content": r["content"],
+            "timestamp": str(r.get("timestamp")) if r.get("timestamp") else None,
+        }
+        for r in rows
+    ]
 
 
-async def add_message(course_code, session_id, role, content):
-    async with Database.session() as session:
-        store = ChatStore(session)
-        await store.add_message(course_code, session_id, role, content)
+async def add_message(course_code, session_id, role, content, user_id=None):
+    db = await SurrealDBManager.get_db()
+    await db.query(
+        "CREATE chat_message CONTENT { user_id: $uid, course_code: $code, session_id: $sid, message_role: $role, content: $content }",
+        {"uid": user_id or "", "code": course_code, "sid": session_id, "role": role, "content": content},
+    )
 
 
-async def clear_course_history(course_code, session_id):
-    async with Database.session() as session:
-        store = ChatStore(session)
-        await store.clear_history(course_code, session_id)
+async def clear_course_history(course_code, session_id, user_id=None):
+    db = await SurrealDBManager.get_db()
+    params = {"code": course_code, "sid": session_id}
+    extra = ""
+    if user_id:
+        extra = " AND user_id = $uid"
+        params["uid"] = user_id
+    await db.query(
+        f"DELETE chat_message WHERE course_code = $code AND session_id = $sid{extra}",
+        params,
+    )

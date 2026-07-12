@@ -17,7 +17,6 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.config import settings
-from app.database import Database
 from app.rag import RAGPipeline
 from app.query_engine import QueryEngine
 from app.curriculum import CurriculumManager
@@ -35,29 +34,23 @@ logger = logging.getLogger(__name__)
 
 
 async def seed_default_users():
-    from app.auth import hash_password
-    from app.stores.user_store import UserStore
+    from app.auth import hash_password, get_user_by_email, _create_user
     defaults = [
         ("student@test.com", "password123", "student"),
         ("faculty@test.com", "password123", "faculty"),
         ("admin@test.com", "password123", "admin"),
     ]
-    async with Database.session() as session:
-        store = UserStore(session)
-        for email, pw, role in defaults:
-            existing = await store.get_by_email(email)
-            if existing:
-                logger.info("Default user already exists: %s", email)
-            else:
-                await store.create(email, hash_password(pw), role)
-                logger.info("Created default user: %s (%s)", email, role)
+    for email, pw, role in defaults:
+        existing = await get_user_by_email(email)
+        if existing:
+            logger.info("Default user already exists: %s", email)
+        else:
+            await _create_user(email, hash_password(pw), role)
+            logger.info("Created default user: %s (%s)", email, role)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Database.init()
-    await Database.wait_ready()
-    await Database.create_all()
     await seed_default_users()
     app.state.rag = RAGPipeline()
     app.state.engine = QueryEngine()
@@ -66,7 +59,6 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up RAG pipeline API...")
     yield
     logger.info("Shutting down...")
-    await Database.close()
 
 
 app = FastAPI(title="Adaptive Learning RAG API", version="1.0.0", lifespan=lifespan)

@@ -23,7 +23,7 @@ async def create_course(course_code: str, course_name: str, description: str, ic
     
     # Check if course already exists
     existing = await db.query("SELECT * FROM course WHERE course_code = $code", {"code": course_code})
-    if existing and isinstance(existing, list) and len(existing) > 0 and "result" in existing[0] and existing[0]["result"]:
+    if existing and len(existing) > 0:
         raise ValueError(f"Course with code {course_code} already exists")
     
     new_course = {
@@ -48,21 +48,20 @@ async def update_course(course_code: str, course_name: Optional[str] = None, des
         update_data["icon"] = sanitize_text(icon, 10)
     
     if not update_data:
-        # Fetch current if no updates provided
         res = await db.query("SELECT * FROM course WHERE course_code = $code", {"code": course_code})
-        if not res or not res[0]["result"]:
+        if not res:
             raise ValueError(f"Course with code {course_code} not found")
-        return res[0]["result"][0]
+        return res[0]
 
     res = await db.query(
         "UPDATE course MERGE $data WHERE course_code = $code RETURN AFTER",
         {"data": update_data, "code": course_code}
     )
     
-    if not res or not res[0]["result"]:
+    if not res:
         raise ValueError(f"Course with code {course_code} not found")
         
-    return res[0]["result"][0]
+    return res[0]
 
 async def delete_course(course_code: str):
     course_code = validate_course_code(course_code)

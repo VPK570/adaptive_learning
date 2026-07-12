@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, Form, HTTPException
 from typing import Annotated
 
+from app.auth import require_role
 from app.deps import get_rag, get_curriculum
 from app.rag import RAGPipeline
 from app.curriculum import CurriculumManager
@@ -25,6 +26,7 @@ async def ingest_pdf(
     course_code: Annotated[str, Form()] = "BAECE102",
     topic: Annotated[str, Form()] = "",
     rag: RAGPipeline = Depends(get_rag),
+    _=Depends(require_role("faculty", "admin")),
 ):
     course_code = validate_course_code(course_code)
     topic = sanitize_text(topic, MAX_TOPIC_LENGTH)
@@ -61,6 +63,7 @@ async def upload_curriculum(
     file: Annotated[UploadFile, Form(...)],
     course_code: Annotated[str, Form(...)],
     curriculum: CurriculumManager = Depends(get_curriculum),
+    _=Depends(require_role("faculty", "admin")),
 ):
     course_code = validate_course_code(course_code)
     if not file.filename.lower().endswith(".pdf"):

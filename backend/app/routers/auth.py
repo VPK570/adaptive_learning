@@ -15,10 +15,9 @@ from app.auth import (
     verify_password,
     create_access_token,
     get_user_by_email,
+    _create_user,
     VALID_ROLES,
 )
-from app.database import Database
-from app.stores.user_store import UserStore
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -57,12 +56,10 @@ async def register(body: RegisterRequest):
             detail="An account with this email already exists",
         )
 
-    async with Database.session() as session:
-        store = UserStore(session)
-        try:
-            await store.create(body.email.lower().strip(), hash_password(body.password), role)
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    try:
+        await _create_user(body.email.lower().strip(), hash_password(body.password), role)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
     token = create_access_token({"sub": body.email.lower().strip(), "role": role})
     return TokenResponse(access_token=token, role=role)
