@@ -13,12 +13,10 @@ Welcome! This guide will help you get started with contributing to the project.
    - `python -m venv venv`
    - `source venv/bin/activate` (or `venv\Scripts\activate`)
    - `pip install -r requirements.txt`
-   - `python server.py`
+   - `uvicorn server:app --reload --port 8001`
 
 2. **Frontend**:
-   - **Legacy**: `cd frontend && npm install && npm run dev`
-   - **New**: `cd new_frontend && npm install && npm run dev`
-   - Use the `new_frontend/` directory for active development.
+   - `cd new_frontend && npm install && npm run dev`
 
 ## Storage Structure
 The project uses `backend/storage/` to manage chat history, flashcards, and quizzes. Do not store binary files in these directories.

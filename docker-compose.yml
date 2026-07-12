@@ -23,12 +23,10 @@ services:
       - SURREAL_DB=learning_platform
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@postgres:5432/adaptive_learning}
       - BASE_STORAGE_DIR=/app/storage
       - CHROMA_PATH=/app/chroma_db
     depends_on:
       - surrealdb
-      - postgres
     volumes:
       - ./backend/storage:/app/storage
       - ./chroma_db:/app/chroma_db
@@ -44,19 +42,6 @@ services:
     depends_on:
       - backend
 
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      - POSTGRES_DB=adaptive_learning
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    ports:
-      - "5434:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-
 
 volumes:
   surreal_data:
-  postgres_data:

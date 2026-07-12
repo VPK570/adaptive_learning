@@ -7,6 +7,7 @@ __pycache__/
 *.py[cod]
 *.so
 .pytest_cache/
+.ruff_cache/
 coverage/
 .coverage
 *.egg-info/
@@ -52,6 +53,10 @@ chromadb/
 dist/
 build/
 
+# TypeScript
+*.tsbuildinfo
+.mypy_cache/
+
 # Backup
 *.bak
 *.backup
@@ -60,6 +65,7 @@ build/
 saved_flashcards.json.bak
 saved_quizzes.json.bak
 chat_history.json.bak
+legacy_data/
 
 # Git worktrees
-/.worktrees/
+.worktrees/
