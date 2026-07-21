@@ -11,7 +11,8 @@ import { useAuthStore } from '@/lib/store/authStore';
 import styles from './Admin.module.css';
 
 export default function AdminDashboard() {
-  const user = useAuthStore(s => s.user);
+  const _user = useAuthStore(s => s.user);
+  const user = _user ? { ..._user, initials: (_user.name?.split(' ').map((s: string) => s[0]).join('') || 'U').toUpperCase() } : null;
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);

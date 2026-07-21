@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "UniAI",
+  title: "Vbook LM",
   description: "University AI Platform",
 };
 

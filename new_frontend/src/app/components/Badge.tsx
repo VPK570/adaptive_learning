@@ -6,8 +6,8 @@ export default function Badge({
   variant = 'solid', 
   color = 'primary', // primary, secondary, error, role-admin, role-professor, role-student
   children,
-  icon: Icon
-}) {
+  icon: Icon = undefined
+}: { variant?: string; color?: string; children: any; icon?: any }) {
   // variants: 'solid' | 'outline-pill' | 'mono-chip' | 'pulse' | 'role'
 
   const badgeClass = `${styles.badge} ${styles[variant]} ${styles[color]}`;

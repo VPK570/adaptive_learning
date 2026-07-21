@@ -88,7 +88,7 @@ export default function Home() {
               <path d="M6 12v5c3 3 9 3 12 0v-5"/>
             </svg>
           </div>
-          <h1 className="auth-title">UniAI</h1>
+          <h1 className="auth-title">Vbook LM</h1>
           <p className="auth-subtitle">University AI Platform</p>
         </header>
 
@@ -196,7 +196,7 @@ export default function Home() {
 
         <footer className="auth-footer">
           <p className="auth-footer-text">
-            Don't have an account? <a href="#" className="auth-link">Create an account</a>
+            Don't have an account? <a href="/register" className="auth-link">Create an account</a>
           </p>
           <div className="trust-badge">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

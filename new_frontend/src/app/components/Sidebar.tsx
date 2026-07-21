@@ -1,18 +1,30 @@
 import React from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, BookOpen, Bot, Activity, BarChart2, Settings, HelpCircle, Plus } from 'lucide-react';
+import { LayoutDashboard, Bot, ClipboardCheck, Layers, Activity, BarChart2, LogOut } from 'lucide-react';
+import { useAuthStore } from '@/lib/store/authStore';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar({ navRole, activeNavKey, isOpen, onClose }) {
-  // navRole: "student" | "faculty" | "admin"
-  
-  const navItems = [
-    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: navRole === 'admin' ? '/admin/dashboard' : navRole === 'faculty' ? '/faculty/dashboard' : '/student/dashboard' },
-    { key: 'courses', label: 'My Courses', icon: BookOpen, href: navRole === 'faculty' ? '/faculty/dashboard' : '/student/dashboard' }, // simplified generic routes for now
-    { key: 'ai-assistant', label: 'AI Assistant', icon: Bot, href: '/student/chat' },
-    { key: 'progress', label: 'Progress', icon: Activity, href: '/student/progress' },
-    { key: 'analytics', label: 'Analytics', icon: BarChart2, href: '/faculty/analytics' },
-  ];
+  const logout = useAuthStore(s => s.logout);
+
+  const navItems = [];
+  if (navRole === 'student') {
+    navItems.push(
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/student/dashboard' },
+      { key: 'quiz', label: 'AI Quiz', icon: ClipboardCheck, href: '/student/quiz' },
+      { key: 'flashcards', label: 'Flashcards', icon: Layers, href: '/student/flashcards' },
+      { key: 'progress', label: 'Progress', icon: Activity, href: '/student/progress' },
+    );
+  } else if (navRole === 'faculty') {
+    navItems.push(
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/faculty/dashboard' },
+      { key: 'analytics', label: 'Analytics', icon: BarChart2, href: '/faculty/analytics' },
+    );
+  } else if (navRole === 'admin') {
+    navItems.push(
+      { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
+    );
+  }
 
   return (
     <>
@@ -27,14 +39,7 @@ export default function Sidebar({ navRole, activeNavKey, isOpen, onClose }) {
               <path d="M6 12v5c3 3 9 3 12 0v-5"/>
             </svg>
           </div>
-          <span className={styles.brandName}>UniAI</span>
-        </div>
-
-        <div className={styles.actionBlock}>
-          <button className={styles.newSessionBtn}>
-            <Plus size={18} />
-            <span>New Research Session</span>
-          </button>
+          <span className={styles.brandName}>Vbook LM</span>
         </div>
 
         <nav className={styles.navMain}>
@@ -57,16 +62,10 @@ export default function Sidebar({ navRole, activeNavKey, isOpen, onClose }) {
         <div className={styles.footerBlock}>
           <ul className={styles.navList}>
             <li className={styles.navItem}>
-              <Link href="#" className={styles.navLink}>
-                <Settings size={20} className={styles.navIcon} />
-                <span>Settings</span>
-              </Link>
-            </li>
-            <li className={styles.navItem}>
-              <Link href="#" className={styles.navLink}>
-                <HelpCircle size={20} className={styles.navIcon} />
-                <span>Help & Support</span>
-              </Link>
+              <button onClick={logout} className={styles.navLink} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', color: 'var(--color-error)', font: 'inherit', fontSize: 'inherit' }}>
+                <LogOut size={20} className={styles.navIcon} />
+                <span>Logout</span>
+              </button>
             </li>
           </ul>
         </div>

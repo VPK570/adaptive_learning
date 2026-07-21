@@ -12,11 +12,11 @@ export default function AppShell({
   activeNavKey = 'dashboard', 
   topBarVariant = 'search',
   user = { name: 'Demo User', initials: 'DU' },
-  tabs,
-  activeTab,
-  onTabChange,
-  breadcrumbs,
-  onBack
+  tabs = undefined,
+  activeTab = undefined,
+  onTabChange = undefined,
+  breadcrumbs = undefined,
+  onBack = undefined
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const storeUser = useAuthStore((s) => s.user);
