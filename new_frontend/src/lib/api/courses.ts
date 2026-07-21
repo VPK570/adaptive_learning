@@ -9,4 +9,5 @@ export const coursesApi = {
   remove: (code: string) => api.delete(`/courses/${code}`).then(r => r.data),
   getStats: (courseCode: string) => api.get<CourseStats>('/stats', { params: { course_code: courseCode } }).then(r => r.data),
   getTopics: (course: string) => api.get('/curriculum/topics', { params: { course } }).then(r => r.data),
+  getStructuredTopics: (code: string) => api.get<any[]>(`/courses/${code}/topics`).then(r => r.data),
 };

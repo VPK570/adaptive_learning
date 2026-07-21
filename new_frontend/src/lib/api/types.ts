@@ -55,6 +55,7 @@ export interface CourseStats {
   image_chunks?: number;
   topics?: { topic: string; chunks: number }[];
   documents: { name: string }[];
+  curriculum_docs?: { name: string }[];
 }
 
 // Quiz
@@ -71,6 +72,7 @@ export interface QuizRequest {
   course_code: string;
   topic: string;
   count?: number;
+  bloom_levels?: number[];
 }
 
 export interface SaveQuizRequest {
@@ -78,6 +80,8 @@ export interface SaveQuizRequest {
   topic: string;
   questions: QuizQuestion[];
   score: number;
+  total: number;
+  bloom_levels?: number[];
 }
 
 export interface SavedQuiz {
@@ -92,12 +96,14 @@ export interface SavedQuiz {
 export interface Flashcard {
   question: string;
   answer: string;
+  bloom_level?: number;
 }
 
 export interface FlashcardRequest {
   course_code: string;
   topic: string;
   count?: number;
+  bloom_levels?: number[];
 }
 
 export interface SaveFlashcardRequest {
@@ -121,6 +127,8 @@ export interface QueryRequest {
   top_k?: number;
   language?: string;
   mastery?: number | null;
+  bloom_level?: number | null;
+  image_ids?: string[];
 }
 
 export interface ChatMessage {
@@ -128,6 +136,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text?: string;
   content?: string;
+  images?: string[];
   paragraphs?: string[];
   bullets?: { label: string; text: string }[];
   sources?: { file?: string; page?: number; source_title?: string }[];

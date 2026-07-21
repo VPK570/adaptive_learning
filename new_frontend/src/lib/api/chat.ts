@@ -4,7 +4,23 @@ import type { ChatMessage, QueryRequest } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
+function parseUserMessage(msg: ChatMessage): { text: string; images: string[] } {
+  if (msg.role !== 'user' || !msg.content) return { text: msg.text || msg.content || '', images: [] };
+  try {
+    const parsed = JSON.parse(msg.content);
+    if (parsed && typeof parsed.text === 'string') return parsed;
+  } catch {}
+  return { text: msg.content, images: [] };
+}
+
 export const chatApi = {
+  uploadImage: (file: File, sessionId: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('session_id', sessionId);
+    return api.post<{ image_id: string }>('/chat-images', formData).then(r => r.data.image_id);
+  },
+
   getHistory: (courseCode: string, sessionId: string) =>
     api.get<ChatMessage[]>('/chat-history', { params: { course_code: courseCode, session_id: sessionId } }).then(r => r.data),
   saveMessage: (courseCode: string, sessionId: string, role: string, content: string) =>
@@ -15,6 +31,7 @@ export const chatApi = {
   queryStream: (
     body: QueryRequest,
     onContent: (text: string) => void,
+    onThinking: (text: string) => void,
     onMetadata: (meta: Record<string, unknown>) => void,
     onError: (err: Error) => void,
   ): Promise<void> => {
@@ -47,7 +64,9 @@ export const chatApi = {
           if (trimmed.startsWith('data: ')) {
             try {
               const data = JSON.parse(trimmed.slice(6));
-              if (data.type === 'content') {
+              if (data.type === 'thinking') {
+                onThinking(data.content);
+              } else if (data.type === 'content') {
                 onContent(data.content);
               } else if (data.type === 'metadata') {
                 onMetadata(data);

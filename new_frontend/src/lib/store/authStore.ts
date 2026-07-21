@@ -14,12 +14,11 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  hydrate: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       token: null,
       user: null,
       isAuthenticated: false,
@@ -44,16 +43,15 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      hydrate: () => {
-        const { token } = get();
-        if (token && !get().isAuthenticated) {
-          set({ isAuthenticated: true });
-        }
-      },
     }),
     {
       name: 'uniauth',
-      partialize: (state) => ({ token: state.token, user: state.user }),
+      partialize: (state) => ({ token: state.token, user: state.user, isAuthenticated: state.isAuthenticated }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as object),
+        isAuthenticated: !!((persisted as Record<string, unknown>)?.token),
+      }),
     }
   )
 );
