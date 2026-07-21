@@ -4,7 +4,6 @@ These two routes must stay PUBLIC (no token required) — you can't have a
 token before you log in.
 """
 
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm

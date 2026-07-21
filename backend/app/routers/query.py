@@ -1,6 +1,9 @@
+import base64
 import json
+import logging
+from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.deps import get_rag, get_engine
@@ -13,10 +16,30 @@ from app.validation import (
     sanitize_text,
     MAX_QUESTION_LENGTH,
 )
-from app.analytics import log_query
-from app.chat_history import get_course_history, add_message
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads" / "chat"
+
+
+def _load_images(image_ids: list[str]) -> list[dict]:
+    if not image_ids:
+        return []
+    loaded = []
+    for img_id in image_ids:
+        img_path = (UPLOAD_DIR / img_id).resolve()
+        base = UPLOAD_DIR.resolve()
+        if not str(img_path).startswith(str(base)):
+            raise HTTPException(status_code=400, detail=f"Invalid image: {img_id}")
+        if not img_path.is_file():
+            raise HTTPException(status_code=400, detail=f"Image not found: {img_id}")
+        data = img_path.read_bytes()
+        ext = img_path.suffix.lower()
+        mime = "image/jpeg" if ext == ".jpg" else "image/png"
+        loaded.append({"b64": base64.b64encode(data).decode(), "mime": mime})
+    return loaded
 
 
 @router.get("/health")
@@ -74,13 +97,19 @@ async def get_chunks(
 @router.post("/query-stream")
 async def query_stream(
     body: QueryRequest,
+    request: Request,
     engine: QueryEngine = Depends(get_engine),
 ):
     course_code = validate_course_code(body.course_code)
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
+    user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
+
+    from app.chat_history import get_course_history, add_message
 
     history = await get_course_history(body.course_code, body.session_id)
+
+    image_data = _load_images(body.image_ids)
 
     async def stream_generator():
         full_response = ""
@@ -92,8 +121,10 @@ async def query_stream(
             course_name=course_code,
             language=body.language,
             mastery=body.mastery,
+            bloom_level=body.bloom_level,
             history=history,
             top_k=body.top_k,
+            images=image_data or None,
         ):
             if chunk["type"] == "content":
                 full_response += chunk["content"]
@@ -103,11 +134,18 @@ async def query_stream(
             yield f"data: {json.dumps(chunk)}\n\n"
 
         if full_response:
-            await log_query(
-                question, course_code, full_response, metadata.get("cited_sources", [])
-            )
-            await add_message(course_code, session_id, "user", question)
-            await add_message(course_code, session_id, "assistant", full_response)
+            try:
+                from app.db import get_db
+                db = await get_db()
+                await db.query(
+                    "CREATE query_log CONTENT { course_code: $cc, question: $q, response_preview: $r, cited_sources: $s, user_id: $uid, out_of_scope: false, timestamp: time::now() }",
+                    {"cc": course_code, "q": question, "r": full_response[:200], "s": metadata.get("cited_sources", []), "uid": user_email},
+                )
+                user_content = json.dumps({"text": question, "images": body.image_ids})
+                await add_message(course_code, session_id, "user", user_content, user_id=user_email)
+                await add_message(course_code, session_id, "assistant", full_response, user_id=user_email)
+            except Exception as e:
+                logger.error("Failed to persist query_log for course=%s: %s", course_code, e)
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
@@ -115,13 +153,19 @@ async def query_stream(
 @router.post("/query", response_model=QueryResponse)
 async def query(
     body: QueryRequest,
+    request: Request,
     engine: QueryEngine = Depends(get_engine),
 ):
     course_code = validate_course_code(body.course_code)
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
+    user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
+
+    from app.chat_history import get_course_history, add_message
 
     history = await get_course_history(body.course_code, body.session_id)
+
+    image_data = _load_images(body.image_ids)
 
     result = await engine.query(
         query=question,
@@ -129,13 +173,21 @@ async def query(
         course_name=course_code,
         language=body.language,
         mastery=body.mastery,
+        bloom_level=body.bloom_level,
         history=history,
         top_k=body.top_k,
+        images=image_data or None,
     )
 
-    await log_query(question, course_code, result["response"], result["cited_sources"])
-    await add_message(course_code, session_id, "user", question)
-    await add_message(course_code, session_id, "assistant", result["response"])
+    from app.db import get_db
+    _db = await get_db()
+    await _db.query(
+        "CREATE query_log CONTENT { course_code: $cc, question: $q, response_preview: $r, cited_sources: $s, user_id: $uid, out_of_scope: false, timestamp: time::now() }",
+        {"cc": course_code, "q": question, "r": result["response"][:200], "s": result["cited_sources"], "uid": user_email},
+    )
+    user_content = json.dumps({"text": question, "images": body.image_ids})
+    await add_message(course_code, session_id, "user", user_content, user_id=user_email)
+    await add_message(course_code, session_id, "assistant", result["response"], user_id=user_email)
 
     return QueryResponse(
         response=result["response"],

@@ -33,9 +33,15 @@ async def platform_stats():
     course_result = await db.query("SELECT count() AS total FROM course GROUP ALL")
     course_count = course_result[0]["total"] if course_result else 0
 
+    doc_result = await db.query("SELECT count() AS total FROM document GROUP ALL")
+    doc_count = doc_result[0]["total"] if doc_result else 0
+
+    conv_result = await db.query("SELECT count() AS total FROM (SELECT session_id FROM chat_message GROUP BY session_id) GROUP ALL")
+    conv_count = conv_result[0]["total"] if conv_result else 0
+
     return {
         "total_users": user_count,
         "total_courses": course_count,
-        "total_documents": 0,
-        "total_conversations": 0,
+        "total_documents": doc_count,
+        "total_conversations": conv_count,
     }

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth import require_role
 from app.deps import get_rag
 from app.rag import RAGPipeline
 from app.schemas import PaperRequest
@@ -13,6 +14,7 @@ router = APIRouter()
 async def create_paper(
     body: PaperRequest,
     rag: RAGPipeline = Depends(get_rag),
+    _=Depends(require_role("faculty", "admin")),
 ):
     course_code = validate_course_code(body.course_code)
     sanitized_topics = [sanitize_text(t, MAX_TOPIC_LENGTH) for t in body.topics]

@@ -27,11 +27,14 @@ async def get_course(course_code: str, rag: RAGPipeline = Depends(get_rag)):
 @router.get("/courses")
 async def list_courses(rag: RAGPipeline = Depends(get_rag)):
     courses = await get_all_courses_data()
+    if not courses:
+        return courses
+    codes = [c["course_code"] for c in courses]
+    stats_map = await rag.get_batch_stats(codes)
     for course in courses:
-        cc = validate_course_code(course["course_code"])
-        stats = await rag.get_course_stats(cc)
+        stats = stats_map.get(course["course_code"], {})
         course["doc_count"] = len(stats.get("documents", []))
-        course["chunk_count"] = stats.get("total_chunks", 0)
+        course["chunk_count"] = stats.get("chunk_count", 0)
     return courses
 
 
@@ -85,3 +88,17 @@ async def list_curriculum_files(
 ):
     course = validate_course_code(course)
     return await curriculum.list_curriculum(course)
+
+
+@router.get("/courses/{course_code}/topics")
+async def get_structured_topics(course_code: str):
+    from app.topics import get_course_topics as get_topics
+    course_code = validate_course_code(course_code)
+    return await get_topics(course_code)
+
+
+@router.get("/courses/{course_code}/coverage")
+async def get_coverage(course_code: str):
+    from app.topics import get_topic_coverage
+    course_code = validate_course_code(course_code)
+    return await get_topic_coverage(course_code)

@@ -1,5 +1,6 @@
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,25 +17,41 @@ load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.config import settings
-from app.rag import RAGPipeline
-from app.query_engine import QueryEngine
-from app.curriculum import CurriculumManager
-from app.saved_content import SavedContentManager
-from app.validation import MAX_FILE_SIZE
-from app.auth import decode_token
-from app.routers import admin as admin_routes, ingestion, query, courses, analytics, chat, flashcards, quiz, paper, auth as auth_routes
-from app.routers import users as users_routes
+from app.logging_middleware import request_id_var  # noqa: E402
+
+# Ensure every log record has request_id before any module logs
+_old_factory = logging.getLogRecordFactory()
+def _make_record(*args, **kwargs):
+    r = _old_factory(*args, **kwargs)
+    r.request_id = request_id_var.get()[:8] or "-"
+    return r
+logging.setLogRecordFactory(_make_record)
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    format="%(asctime)s | %(levelname)-8s | %(request_id)s | %(name)s | %(message)s",
+    force=True,
 )
+
+from app.config import settings  # noqa: E402
+from app.rag import RAGPipeline  # noqa: E402
+from app.query_engine import QueryEngine  # noqa: E402
+from app.curriculum import CurriculumManager  # noqa: E402
+from app.knowledge_state import KnowledgeStateManager  # noqa: E402
+from app.validation import MAX_FILE_SIZE  # noqa: E402
+from app.auth import decode_token  # noqa: E402
+from app.routers import ingestion, query, courses, chat, flashcards, quiz, paper, analytics, images, auth as auth_routes  # noqa: E402
+from app.routers import admin as admin_routes, users as users_routes, learning_path as learning_path_routes, tasks as tasks_routes  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
-async def seed_default_users():
-    from app.auth import hash_password, get_user_by_email, _create_user
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.auth import hash_password, _create_user, get_user_by_email
+    from app.db import SurrealDBManager
+    await SurrealDBManager.get_db()
+
     defaults = [
         ("student@test.com", "password123", "student"),
         ("faculty@test.com", "password123", "faculty"),
@@ -42,20 +59,14 @@ async def seed_default_users():
     ]
     for email, pw, role in defaults:
         existing = await get_user_by_email(email)
-        if existing:
-            logger.info("Default user already exists: %s", email)
-        else:
+        if not existing:
             await _create_user(email, hash_password(pw), role)
             logger.info("Created default user: %s (%s)", email, role)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await seed_default_users()
     app.state.rag = RAGPipeline()
     app.state.engine = QueryEngine()
     app.state.curriculum = CurriculumManager()
-    app.state.saved_content = SavedContentManager()
+    app.state.knowledge_state = KnowledgeStateManager()
     logger.info("Starting up RAG pipeline API...")
     yield
     logger.info("Shutting down...")
@@ -77,6 +88,17 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception: %s", exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
 @app.middleware("http")
 async def limit_upload_size(request: Request, call_next):
     if request.method in ["POST", "PUT"]:
@@ -90,9 +112,20 @@ PUBLIC_PREFIXES = ("/auth", "/health", "/docs", "/openapi.json", "/redoc")
 
 
 @app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    rid = request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])
+    request.state.request_id = rid
+    token = request_id_var.set(rid)
+    try:
+        return await call_next(request)
+    finally:
+        request_id_var.reset(token)
+
+
+@app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path.startswith(PUBLIC_PREFIXES):
+    if path.startswith(PUBLIC_PREFIXES) or request.method == "OPTIONS":
         return await call_next(request)
 
     auth = request.headers.get("Authorization")
@@ -110,15 +143,19 @@ async def auth_middleware(request: Request, call_next):
 
 app.include_router(query.router)
 app.include_router(courses.router)
-app.include_router(analytics.router)
 app.include_router(chat.router)
 app.include_router(ingestion.router)
 app.include_router(flashcards.router)
 app.include_router(quiz.router)
 app.include_router(paper.router)
+app.include_router(images.router)
 app.include_router(auth_routes.router)
+app.include_router(analytics.router)
 app.include_router(users_routes.router)
 app.include_router(admin_routes.router)
+app.include_router(learning_path_routes.router, prefix="/api")
+app.include_router(tasks_routes.router)
+
 
 if __name__ == "__main__":
     import uvicorn
