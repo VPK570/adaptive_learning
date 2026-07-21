@@ -1,192 +1,314 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, FileText, ArrowRight, Upload } from 'lucide-react';
+import { Upload, FileText, Trash2 } from 'lucide-react';
 import AppShell from '@/app/components/AppShell';
 import Dropzone from '@/app/components/Dropzone';
-import FileTypeIcon from '@/app/components/FileTypeIcon';
 import Badge from '@/app/components/Badge';
-import ProgressBar from '@/app/components/ProgressBar';
 import { ingestionApi } from '@/lib/api/ingestion';
 import { coursesApi } from '@/lib/api/courses';
+import type { CourseStats } from '@/lib/api/types';
+import { BookOpen, Layers } from 'lucide-react';
 import styles from './UploadMaterials.module.css';
 
 interface UploadFile {
   id: number;
   name: string;
-  status: 'uploading' | 'processing' | 'ready' | 'error';
+  status: 'uploading' | 'processing' | 'error';
   size: string;
   progress: number;
-  result?: { chunks?: number; tokens?: number };
 }
 
-export default function UploadMaterials({ params }: { params: { code: string } }) {
+export default function UploadMaterials({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
-  const courseCode = params.code || '';
-  const [files, setFiles] = useState<UploadFile[]>([]);
-  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
+  const { code: courseCode } = use(params);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadFile[]>([]);
+  const [existingDocs, setExistingDocs] = useState<string[]>([]);
+  const [existingCurrDocs, setExistingCurrDocs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'materials' | 'curriculum'>('materials');
+  const [structuredTopics, setStructuredTopics] = useState<any[]>([]);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+  const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
+
+  const fetchDocs = useCallback((signal?: AbortSignal) => {
+    coursesApi.getStats(courseCode)
+      .then((data: CourseStats) => {
+        if (!signal?.aborted) {
+          setExistingDocs((data.documents || []).map(d => d.name));
+          setExistingCurrDocs((data.curriculum_docs || []).map(d => d.name));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
+  }, [courseCode]);
+
+  const handleDeleteDoc = useCallback(async (name: string) => {
+    if (!confirm(`Delete "${name}"? This will remove all related chunks and embeddings.`)) return;
+    setDeletingFilename(name);
+    try {
+      if (activeTab === 'materials') {
+        await ingestionApi.deleteMaterial(courseCode, name);
+      } else {
+        await ingestionApi.deleteCurriculum(courseCode, name);
+      }
+      if (activeTab === 'curriculum') setStructuredTopics([]);
+      fetchDocs();
+    } catch {
+      alert('Failed to delete document');
+    } finally {
+      setDeletingFilename(null);
+    }
+  }, [courseCode, activeTab, fetchDocs]);
 
   useEffect(() => {
     if (!courseCode) return;
     const controller = new AbortController();
-    coursesApi.get(courseCode)
-      .then(() => {})
-      .catch(() => {});
-    // ponytail: curriculum listing uses coursesApi.getTopics — doesn't return file names;
-    // skip pre-populating file list for now, files appear after upload
-    if (!controller.signal.aborted) setLoading(false);
+    fetchDocs(controller.signal);
     return () => controller.abort();
-  }, [courseCode]);
+  }, [courseCode, fetchDocs]);
 
   const handleDrop = useCallback((newFiles: File[]) => {
-    newFiles.forEach((file) => {
+    newFiles.forEach(file => {
       const fileId = Date.now() + Math.random();
-      const newFile: UploadFile = {
+      const entry: UploadFile = {
         id: fileId,
         name: file.name,
         status: 'uploading',
         size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
         progress: 0,
       };
-      setFiles(prev => [...prev, newFile]);
-      setSelectedFileId(fileId);
+      setUploadingFiles(prev => [...prev, entry]);
 
       ingestionApi.ingestPdf(
         file,
         courseCode,
         '',
-        (pct) => {
-          setFiles(prev => prev.map(f =>
+        pct => {
+          setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, progress: pct } : f
           ));
         },
       )
-        .then((result) => {
-          setFiles(prev => prev.map(f =>
-            f.id === fileId
-              ? { ...f, status: 'ready', progress: 100, result: { chunks: result?.chunks || result?.total_chunks, tokens: result?.tokens } }
-              : f
+        .then(() => {
+          setUploadingFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
           ));
+          fetchDocs();
         })
         .catch(() => {
-          setFiles(prev => prev.map(f =>
+          setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
           ));
         });
     });
   }, [courseCode]);
 
-  const breadcrumbs = [
-    { label: 'Dashboard', href: '/faculty/dashboard' },
-    { label: courseCode }
+  const handleCurriculumDrop = useCallback((newFiles: File[]) => {
+    newFiles.forEach(file => {
+      const fileId = Date.now() + Math.random();
+      const entry: UploadFile = {
+        id: fileId,
+        name: file.name,
+        status: 'uploading',
+        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        progress: 0,
+      };
+      setUploadingFiles(prev => [...prev, entry]);
+
+      ingestionApi.uploadCurriculum(
+        file,
+        courseCode,
+        '',
+        pct => {
+          setUploadingFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, progress: pct } : f
+          ));
+        },
+      )
+        .then(() => {
+          setUploadingFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
+          ));
+          fetchDocs();
+        })
+        .catch(() => {
+          setUploadingFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
+          ));
+        });
+    });
+  }, [courseCode]);
+
+  const fetchTopics = useCallback(() => {
+    setTopicsLoading(true);
+    coursesApi.getStructuredTopics(courseCode)
+      .then(data => setStructuredTopics(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setTopicsLoading(false));
+  }, [courseCode]);
+
+  useEffect(() => {
+    if (activeTab === 'curriculum' && existingCurrDocs.length > 0) {
+      fetchTopics();
+    }
+  }, [activeTab, existingCurrDocs, fetchTopics]);
+
+  const tabs = [
+    { key: 'materials', label: 'Materials' },
+    { key: 'curriculum', label: 'Curriculum' },
   ];
+
+  const statusVariant: Record<string, 'solid' | 'pulse'> = {
+    uploading: 'pulse', processing: 'pulse', error: 'solid',
+  };
+  const statusColor: Record<string, string> = {
+    uploading: 'primary', processing: 'primary', error: 'danger',
+  };
+  const statusLabel: Record<string, string> = {
+    uploading: 'Uploading', processing: 'Processing...', error: 'Failed',
+  };
+
+  const docList = activeTab === 'materials' ? existingDocs : existingCurrDocs;
 
   return (
     <AppShell
       navRole="faculty"
       activeNavKey="courses"
-      topBarVariant="breadcrumbBack"
-      breadcrumbs={breadcrumbs}
-      onBack={() => router.back()}
+      topBarVariant="tabs"
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={(tab: string) => setActiveTab(tab as 'materials' | 'curriculum')}
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <div className={styles.titleBlock}>
-            <h1 className={styles.pageTitle}>Course Materials</h1>
-            <p className={styles.pageSubtitle}>Upload and manage knowledge base documents for {courseCode}.</p>
-          </div>
+          <h1 className={styles.pageTitle}>
+            {activeTab === 'materials' ? 'Upload Materials' : 'Upload Curriculum'}
+          </h1>
+          <p className={styles.pageSubtitle}>
+            {activeTab === 'materials'
+              ? `Upload PDF reading materials for ${courseCode}. Files are automatically processed and indexed for the AI knowledge base.`
+              : `Upload the curriculum/syllabus PDF for ${courseCode}. Topics will be extracted and used for scope detection and analytics.`}
+          </p>
         </header>
 
         <div className={styles.layout}>
           <div className={styles.leftPanel}>
-            <Dropzone onDrop={handleDrop} />
+            <Dropzone onDrop={activeTab === 'materials' ? handleDrop : handleCurriculumDrop} />
 
-            <div className={styles.fileListSection}>
-              <h3 className={styles.sectionTitle}>Uploaded Resources ({files.length})</h3>
-              <div className={styles.fileList}>
-                {files.map(file => (
-                  <button
-                    key={file.id}
-                    className={`${styles.fileItem} ${selectedFileId === file.id ? styles.selectedFile : ''}`}
-                    onClick={() => setSelectedFileId(file.id)}
-                  >
-                    <FileTypeIcon filename={file.name} isProcessing={file.status !== 'ready'} />
-                    <div className={styles.fileMeta}>
-                      <span className={styles.fileName}>{file.name}</span>
-                      <span className={styles.fileSize}>{file.size}</span>
+            {uploadingFiles.length > 0 && (
+              <div className={styles.uploadQueue}>
+                <h3 className={styles.sectionTitle}>Upload Queue ({uploadingFiles.length})</h3>
+                {uploadingFiles.map(f => (
+                  <div key={f.id} className={styles.queueItem}>
+                    <FileText size={24} style={{ color: 'var(--color-on-surface-variant)' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span className={styles.queueItemName}>{f.name}</span>
+                        <span className={styles.queueItemSize}>{f.size}</span>
+                      </div>
+                      <div className={styles.queueProgress}>
+                        <div className={styles.queueProgressFill} style={{ width: `${f.progress}%` }} />
+                      </div>
                     </div>
-                    {file.status === 'ready' ? (
-                      <Badge variant="solid" color="primary">Ready</Badge>
-                    ) : file.status === 'error' ? (
-                      <Badge variant="solid" color="danger">Failed</Badge>
-                    ) : file.status === 'uploading' ? (
-                      <Badge variant="pulse">{file.progress}%</Badge>
-                    ) : (
-                      <Badge variant="pulse">Processing</Badge>
-                    )}
-                  </button>
+                    <Badge variant={statusVariant[f.status]} color={statusColor[f.status]}>
+                      {f.status === 'uploading' ? `${f.progress}%` : statusLabel[f.status]}
+                    </Badge>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
           </div>
 
           <div className={styles.rightPanel}>
-            {!selectedFile ? (
-              <div className={styles.emptyState}>
-                <Upload size={48} className={styles.emptyIcon} />
-                <h3>Drop files to upload</h3>
-                <p>Drag and drop PDF documents to add them to the knowledge base.</p>
+            <h3 className={styles.sectionTitle}>
+              {activeTab === 'materials' ? 'Course Materials' : 'Curriculum Files'}
+            </h3>
+            {loading ? (
+              <div className={styles.loadingContainer}>
+                <div className={styles.spinner} />
               </div>
-            ) : selectedFile.status === 'uploading' ? (
-              <div className={styles.processingState}>
-                <div className={styles.processingHeader}>
-                  <FileTypeIcon filename={selectedFile.name} />
-                  <div className={styles.processingMeta}>
-                    <span className={styles.processingName}>{selectedFile.name}</span>
-                    <span className={styles.processingStatusText}>Uploading...</span>
-                  </div>
-                </div>
-                <div className={styles.progressSection}>
-                  <ProgressBar percent={selectedFile.progress} showGradient />
-                  <span className={styles.progressValue}>{selectedFile.progress}%</span>
-                </div>
-              </div>
-            ) : selectedFile.status === 'error' ? (
-              <div className={styles.readyCard}>
-                <div className={styles.readyHeader}>
-                  <FileText size={32} className={styles.emptyIcon} />
-                  <h2>Upload Failed</h2>
-                  <p>{selectedFile.name} could not be processed. Try again.</p>
-                </div>
+            ) : error ? (
+              <div className={styles.errorContainer}>{error}</div>
+            ) : docList.length === 0 ? (
+              <div className={styles.emptyDocs}>
+                <Upload size={40} style={{ color: 'var(--color-outline)', marginBottom: 16 }} />
+                <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center' }}>
+                  {activeTab === 'materials'
+                    ? 'No materials uploaded yet. Drop PDFs on the left to get started.'
+                    : 'No curriculum uploaded yet. Drop the syllabus PDF on the left to get started.'}
+                </p>
               </div>
             ) : (
-              <div className={styles.readyCard}>
-                <div className={styles.readyHeader}>
-                  <CheckCircle size={32} className={styles.successIcon} />
-                  <h2>Processing Complete</h2>
-                  <p>{selectedFile.name} is now available in the knowledge base.</p>
-                </div>
-                <div className={styles.statsRow}>
-                  <div className={styles.statMini}>
-                    <span className={styles.statLabel}>Chunks</span>
-                    <span className={styles.statValue}>{selectedFile.result?.chunks ?? '—'}</span>
+              <div className={`${styles.docList} ${styles.customScrollbar}`}>
+                {docList.map(name => (
+                  <div key={name} className={styles.docItem}>
+                    <div className={styles.docIcon}>
+                      <FileText size={24} style={{ color: 'var(--color-primary)' }} />
+                    </div>
+                    <div className={styles.docInfo}>
+                      <span className={styles.docName}>{name}</span>
+                    </div>
+                    <Badge variant="solid" color="primary">Ready</Badge>
+                    <button
+                      className={styles.deleteBtn}
+                      onClick={() => handleDeleteDoc(name)}
+                      disabled={deletingFilename === name}
+                      title={`Delete ${name}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <div className={styles.statMini}>
-                    <span className={styles.statLabel}>Status</span>
-                    <span className={styles.statValue}>Ready</span>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'curriculum' && existingCurrDocs.length > 0 && (
+              <div style={{ marginTop: 'var(--space-6)' }}>
+                <h3 className={styles.sectionTitle}>
+                  <BookOpen size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                  Extracted Topics
+                </h3>
+                {topicsLoading ? (
+                  <div className={styles.loadingContainer}>
+                    <div className={styles.spinner} />
                   </div>
-                </div>
-                <div className={styles.actions}>
-                  <button
-                    className={styles.primaryBtn}
-                    onClick={() => router.push('/faculty/generate')}
-                  >
-                    <span>Generate Question Paper</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
+                ) : structuredTopics.length === 0 ? (
+                  <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: 'var(--space-4)' }}>
+                    No topics extracted yet. Topics are extracted during curriculum processing.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                    {structuredTopics.map((topic, i) => (
+                      <div key={i} className={styles.topicCard}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span className={styles.topicName}>{topic.topic_name}</span>
+                          <Badge variant="solid" color="secondary">{topic.bloom_level}</Badge>
+                        </div>
+                        {topic.subtopics?.length > 0 && (
+                          <div style={{ font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)', marginBottom: 4 }}>
+                            <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                            {topic.subtopics.join(', ')}
+                          </div>
+                        )}
+                        {topic.learning_objectives?.length > 0 && (
+                          <ul style={{ margin: '4px 0 0', paddingLeft: 16, font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)' }}>
+                            {topic.learning_objectives.slice(0, 3).map((obj: string, j: number) => (
+                              <li key={j}>{obj}</li>
+                            ))}
+                            {topic.learning_objectives.length > 3 && (
+                              <li style={{ listStyle: 'none', fontStyle: 'italic' }}>+{topic.learning_objectives.length - 3} more</li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
