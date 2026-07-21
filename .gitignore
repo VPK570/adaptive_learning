@@ -69,3 +69,21 @@ legacy_data/
 
 # Git worktrees
 .worktrees/
+
+# Agent artifacts
+.opencode/
+
+# Local doc/plan artifacts
+STATUS.md
+ponytail-audit.md
+prompts/
+specs/
+seed.spec.ts
+docs/CURRICULUM_FEATURES_PLAN.md
+docs/context-for-claude.md
+docs/superpowers/
+
+# Playwright test artifacts
+new_frontend/.auth/
+new_frontend/playwright-report/
+new_frontend/test-results/
