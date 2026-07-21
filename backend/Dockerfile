@@ -8,18 +8,15 @@ ENV PYTHONUNBUFFERED 1
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy the requirements file into the container at /app
 COPY requirements.txt .
 
 # Upgrade pip and install dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download nltk tokenizer data so it's baked into the image
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 
 # Copy the current directory contents into the container at /app
 COPY . .

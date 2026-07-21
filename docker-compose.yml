@@ -1,8 +1,16 @@
 services:
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   surrealdb:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
     user: root
+    restart: unless-stopped
     command: start --user root --pass root surrealkv://data/surrealdb.db
     ports:
       - "8000:8000"
@@ -28,18 +36,44 @@ services:
       - SURREAL_DB=learning_platform
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
-      - BASE_STORAGE_DIR=/app/storage
-      - CHROMA_PATH=/app/chroma_db
+    restart: unless-stopped
     depends_on:
       - surrealdb
     volumes:
       - ./backend/storage:/app/storage
-      - ./chroma_db:/app/chroma_db
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - SURREAL_URL=ws://surrealdb:8000/rpc
+      - SURREAL_USER=root
+      - SURREAL_PASS=root
+      - SURREAL_NS=adaptive_learning
+      - SURREAL_DB=learning_platform
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    restart: unless-stopped
+    command: celery -A app.tasks worker --loglevel=info
+    depends_on:
+      - redis
+      - surrealdb
+    volumes:
+      - ./backend/storage:/app/storage
 
   frontend:
     build:
       context: ./new_frontend
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
