@@ -5,7 +5,7 @@ Handles both text and image chunks in the context window.
 from app.validation import sanitize_student_query
 from typing import AsyncGenerator, Dict, Any
 from app.config import settings
-from app.openrouter import client
+from app.provider_router import router as client
 from app.citation import validate_citations, remove_uncited_claims, extract_all_citations, parse_citation
 from app.gatekeeper import gatekeeper
 from app.verifier import verifier

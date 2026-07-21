@@ -26,7 +26,12 @@ services:
       - SURREAL_PASS=root
       - SURREAL_NS=adaptive_learning
       - SURREAL_DB=learning_platform
+      - GEMINI_API_KEYS=${GEMINI_API_KEYS}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash-001}
+      - OPENROUTER_API_KEYS=${OPENROUTER_API_KEYS}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nvidia/llama-nemotron-embed-vl-1b-v2:free}
       - JWT_SECRET=${JWT_SECRET}
       - BASE_STORAGE_DIR=/app/storage
       - CHROMA_PATH=/app/chroma_db

@@ -21,7 +21,29 @@ class Settings:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "nvidia/llama-nemotron-embed-vl-1b-v2:free")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-001")
+
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-001")
+    GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-2.5-flash-001")
+    GEMINI_BASE_URL: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
+
+    @property
+    def GEMINI_API_KEYS(self) -> list[str]:
+        return self._parse_csv("GEMINI_API_KEYS", self.GEMINI_API_KEY)
+
+    @property
+    def OPENROUTER_API_KEYS(self) -> list[str]:
+        return self._parse_csv("OPENROUTER_API_KEYS", self.OPENROUTER_API_KEY)
+
+    @staticmethod
+    def _parse_csv(env_name: str, fallback: str) -> list[str]:
+        val = os.getenv(env_name, "")
+        if val:
+            return [k.strip() for k in val.split(",") if k.strip()]
+        if fallback:
+            return [fallback]
+        return []
 
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "5"))
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "512"))
@@ -49,8 +71,10 @@ class Settings:
     def __init__(self):
         if not self.JWT_SECRET or self.JWT_SECRET == "":
             logger.warning("JWT_SECRET is not set — auth tokens cannot be verified. Set it in .env")
-        if not self.OPENROUTER_API_KEY or "your_" in self.OPENROUTER_API_KEY:
-            logger.warning("OPENROUTER_API_KEY is not set — LLM calls will fail. Set it in .env")
+        if not self.OPENROUTER_API_KEY and not self.OPENROUTER_API_KEYS:
+            logger.warning("No OpenRouter API key set — embeddings will fail. Set OPENROUTER_API_KEY or OPENROUTER_API_KEYS in .env")
+        if not self.GEMINI_API_KEY and not self.GEMINI_API_KEYS:
+            logger.warning("No Gemini API key set — LLM calls will fail. Set GEMINI_API_KEY or GEMINI_API_KEYS in .env")
 
 
 settings = get_settings()

@@ -1,6 +1,6 @@
 from typing import Any
 from app.db import get_db
-from app.openrouter import client
+from app.provider_router import router as client
 from app.rag import calculate_file_hash
 from app.validation import validate_course_code
 from surrealdb.errors import InternalError

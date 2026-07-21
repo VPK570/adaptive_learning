@@ -5,7 +5,7 @@ from app.rag import RAGPipeline
 from app.saved_content import SavedContentManager
 from app.schemas import QuizRequest, SaveQuizRequest
 from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
-from app.openrouter import client
+from app.provider_router import router as client
 from app.routers.flashcards import safe_json_parse
 
 router = APIRouter()

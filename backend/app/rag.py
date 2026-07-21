@@ -2,7 +2,7 @@ import hashlib
 from typing import Any
 from app.config import settings
 from app.chunker import chunk_text, clean_text
-from app.openrouter import client
+from app.provider_router import router as client
 from app.db import get_db
 
 

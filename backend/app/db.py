@@ -85,8 +85,8 @@ class SurrealDBManager:
 
     @classmethod
     async def _probe_dimension(cls) -> int:
-        from app.openrouter import client
-        vector = await client.embed_text("probe")
+        from app.provider_router import router
+        vector = await router.embed_text("probe")
         dim = len(vector)
         if not isinstance(dim, int) or dim < 64 or dim > 8192:
             raise RuntimeError(
