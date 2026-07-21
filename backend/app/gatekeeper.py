@@ -24,7 +24,7 @@ Your job is to:
 
 AVAILABLE MATERIALS:
 - Documents: {', '.join(doc_titles) if doc_titles else 'No documents uploaded yet.'}
-- Curriculum Summary: {curriculum_content[:2000] if curriculum_content else 'No curriculum uploaded.'}
+- Curriculum Topics: {curriculum_content if curriculum_content else 'No curriculum uploaded.'}
 
 OUTPUT FORMAT (JSON ONLY):
 {{

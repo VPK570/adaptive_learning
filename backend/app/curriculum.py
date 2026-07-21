@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 from app.db import get_db
 from app.openrouter import client
@@ -5,12 +6,15 @@ from app.rag import calculate_file_hash
 from app.validation import validate_course_code
 from surrealdb.errors import InternalError
 
+logger = logging.getLogger(__name__)
+
 class CurriculumManager:
     async def ingest_curriculum(
         self,
         course_code: str,
         document_title: str,
         filepath: str,
+        topic: str = "",
     ) -> dict[str, Any]:
         course_code = validate_course_code(course_code)
         db = await get_db()
@@ -38,7 +42,7 @@ class CurriculumManager:
                     "source_title": document_title,
                     "page": page.page_num,
                     "text": page.text,
-                    "topic": "",
+                    "topic": topic,
                     "content_type": "curriculum_text"
                 })
         
@@ -52,15 +56,12 @@ class CurriculumManager:
             except InternalError as e:
                 # If the error is about missing fields, we alter the table to add the missing field
                 if "Found field" in str(e) and "but no such field exists" in str(e):
-                    # Extract the missing field name from the error message
-                    # Error format: "Found field 'field_name', but no such field exists for table 'table_name'"
                     import re
                     match = re.search(r"Found field '([^']+)'", str(e))
                     if match:
                         missing_field = match.group(1)
-                        # Alter the table to add the missing field
                         db = await get_db()
-                        await db.query(f"ALTER TABLE curriculum_chunk FIELD {missing_field} TYPE string;")
+                        await db.query(f"DEFINE FIELD {missing_field} ON TABLE curriculum_chunk TYPE option<string>;")
                         # Retry the insert
                         await db.query("INSERT INTO curriculum_chunk $chunks", {"chunks": chunks_to_insert})
                     else:
@@ -71,7 +72,7 @@ class CurriculumManager:
             # Record ingestion in document table
             from datetime import datetime
             await db.query(
-                "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, created_at: $time}",
+                "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, doc_type: 'curriculum', created_at: $time}",
                 {
                     "course": course_code,
                     "file": document_title,
@@ -79,6 +80,15 @@ class CurriculumManager:
                     "time": datetime.now().isoformat()
                 }
             )
+            
+            # Extract structured topics from syllabus text
+            try:
+                from app.topics import extract_topics_from_syllabus, store_course_topics
+                full_syllabus = "\n\n".join(documents)
+                topics = await extract_topics_from_syllabus(full_syllabus)
+                await store_course_topics(course_code, topics)
+            except Exception as e:
+                logger.warning("Topic extraction failed (non-fatal): %s", e)
         
         return {"status": "success", "chunks_ingested": len(chunks_to_insert)}
 

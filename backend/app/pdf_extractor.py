@@ -11,6 +11,7 @@ Pipeline:
 Images are embedded natively using Nemotron VL — no captioning needed.
 """
 
+import asyncio
 import io
 import base64
 import logging
@@ -96,7 +97,7 @@ def _extract_page_images(page) -> list[ImageContent]:
     return images
 
 
-async def extract_all_pages(source: str | bytes) -> list[PageContent]:
+def _sync_extract_all_pages(source: str | bytes) -> list[PageContent]:
     reader = pypdf.PdfReader(io.BytesIO(source) if isinstance(source, bytes) else source)
     pages: list[PageContent] = []
 
@@ -106,3 +107,7 @@ async def extract_all_pages(source: str | bytes) -> list[PageContent]:
         pages.append(PageContent(page_num=i, text=text, images=images))
 
     return pages
+
+
+async def extract_all_pages(source: str | bytes) -> list[PageContent]:
+    return await asyncio.to_thread(_sync_extract_all_pages, source)

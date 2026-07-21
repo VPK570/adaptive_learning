@@ -10,6 +10,7 @@ from app.citation import validate_citations, remove_uncited_claims, extract_all_
 from app.gatekeeper import gatekeeper
 from app.verifier import verifier
 from app.rag import RAGPipeline
+from app.knowledge_state import BLOOM_PROMPTS, BLOOM_LABELS
 
 def extract_cited_sources(response_text: str, chunks: list[dict]) -> list[dict]:
     """Match citations in the response back to retrieved chunks, deduped."""
@@ -41,6 +42,7 @@ def build_tutor_system_prompt(
     course_code: str,
     language: str = "English",
     mastery: float | None = None,
+    bloom_level: int | None = None,
 ) -> str:
     mastery_section = ""
     if mastery is not None:
@@ -53,11 +55,19 @@ def build_tutor_system_prompt(
         else:
             mastery_section = "Student has low mastery. Revisit prerequisites, use guided worked examples."
 
+    bloom_section = ""
+    if bloom_level is not None:
+        label = BLOOM_LABELS.get(bloom_level, f"Level {bloom_level}")
+        prompt = BLOOM_PROMPTS.get(bloom_level, "")
+        bloom_section = f"BLOOM'S TAXONOMY LEVEL: {label}\n{prompt}\n"
+
     return f"""You are an expert {course_name} tutor for VIT students.
 Student is enrolled in {course_code} at VIT Vellore.
 Preferred language: {language}.
 
 {mastery_section}
+
+{bloom_section}
 
 RULES:
 - Answer ONLY from provided course materials. 
@@ -92,9 +102,12 @@ def build_context_window(
         title = c.get("source_title", "Unknown")
         page = c.get("page", "?")
         text = c.get("text", "")
+        is_curriculum = c.get("source_type") == "curriculum"
+        tag = "Curriculum" if is_curriculum else "Text"
+        loc = "Page" if is_curriculum else "Slide"
 
-        parts.append(f"<Text {i}: {title}, Slide {page}>\n{text}\n</Text {i}>")
-        available_citations.append(f"[Source: {title}, Slide {page}]")
+        parts.append(f"<{tag} {i}: {title}, {loc} {page}>\n{text}\n</{tag} {i}>")
+        available_citations.append(f"[{'Curriculum' if is_curriculum else 'Source'}: {title}, {loc} {page}]")
 
     if image_chunks:
         parts.append("\nRELEVANT IMAGES FROM COURSE MATERIALS:")
@@ -133,8 +146,9 @@ def build_tutor_prompt(
     history: list[dict] | None = None,
     language: str = "English",
     mastery: float | None = None,
+    bloom_level: int | None = None,
 ) -> list[dict[str, str]]:
-    system = build_tutor_system_prompt(course_name, course_code, language, mastery)
+    system = build_tutor_system_prompt(course_name, course_code, language, mastery, bloom_level)
     context = build_context_window(chunks, history or [])
 
     safe_query = sanitize_student_query(query)
@@ -158,15 +172,21 @@ class QueryEngine:
     async def _get_gatekeeper_context(self, course_code: str) -> tuple[list[str], str]:
         stats = await self.rag_pipeline.get_course_stats(course_code)
         doc_titles = [d["name"] for d in stats.get("documents", [])]
-        
-        from app.db import get_db
-        db = await get_db()
-        curr_res = await db.query(
-            "SELECT text FROM curriculum_chunk WHERE course_code = $code",
-            {"code": course_code}
-        )
-        curriculum_text = "\n".join([r["text"] for r in (curr_res if curr_res else [])])
-        
+
+        from app.topics import get_course_topics
+        topics = await get_course_topics(course_code)
+        if topics:
+            lines = []
+            for t in topics:
+                subs = "; ".join(t.get("subtopics", []))
+                if subs:
+                    lines.append(f"{t['topic_name']} — {subs}")
+                else:
+                    lines.append(t['topic_name'])
+            curriculum_text = "\n".join(lines)
+        else:
+            curriculum_text = ""
+
         return doc_titles, curriculum_text
 
     async def query_stream(
@@ -178,13 +198,15 @@ class QueryEngine:
         language: str = "English",
         mastery: float | None = None,
         top_k: int = 5,
+        bloom_level: int | None = None,
+        images: list[dict] | None = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         doc_titles, curriculum_text = await self._get_gatekeeper_context(course_code)
         is_relevant, enriched_query, refusal = await gatekeeper.check_and_enrich(
             query, course_code, doc_titles, curriculum_text
         )
 
-        if not is_relevant:
+        if settings.GATEKEEPER_ENABLED and not is_relevant:
             yield {"type": "content", "content": refusal or "This topic is not covered in your course materials."}
             yield {"type": "metadata", "out_of_scope": True, "cited_sources": []}
             return
@@ -206,17 +228,18 @@ class QueryEngine:
             history=history or [],
             language=language,
             mastery=mastery,
+            bloom_level=bloom_level,
         )
 
         strategy_prompt = messages + [
             {"role": "user", "content": "Briefly outline your strategy for answering this student's question based on the provided materials. Keep it to 2-3 sentences."}
         ]
-        strategy_text = await client.chat(strategy_prompt, temperature=0.2, max_tokens=150)
+        strategy_text = await client.chat(strategy_prompt, temperature=0.2, max_tokens=150, images=images)
         if strategy_text:
             yield {"type": "thinking", "content": strategy_text + "\n\n"}
 
         full_response = ""
-        async for chunk in client.stream(messages, temperature=0.3, max_tokens=1024):
+        async for chunk in client.stream(messages, temperature=0.3, max_tokens=1024, images=images):
             if chunk["type"] == "content":
                 full_response += chunk["content"]
             yield chunk
@@ -243,18 +266,22 @@ class QueryEngine:
         language: str = "English",
         mastery: float | None = None,
         top_k: int = 5,
+        bloom_level: int | None = None,
+        images: list[dict] | None = None,
     ) -> dict:
         doc_titles, curriculum_text = await self._get_gatekeeper_context(course_code)
         is_relevant, enriched_query, refusal = await gatekeeper.check_and_enrich(
             query, course_code, doc_titles, curriculum_text
         )
 
-        if not is_relevant:
+        if settings.GATEKEEPER_ENABLED and not is_relevant:
             return {
                 "response": refusal or "This topic is not covered in your course materials.",
                 "out_of_scope": True,
                 "cited_sources": [],
                 "chunks_retrieved": 0,
+                "text_chunks": 0,
+                "image_chunks": 0,
             }
 
         chunks = await self.rag_pipeline.retrieve(
@@ -271,9 +298,10 @@ class QueryEngine:
             history=history or [],
             language=language,
             mastery=mastery,
+            bloom_level=bloom_level,
         )
 
-        response_text = await client.chat(messages, temperature=0.3, max_tokens=1024)
+        response_text = await client.chat(messages, temperature=0.3, max_tokens=1024, images=images)
         
         is_valid, reason = await verifier.verify_answer(query, response_text, chunks, course_code)
         if not is_valid:

@@ -22,6 +22,9 @@ class Settings:
     OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "nvidia/llama-nemotron-embed-vl-1b-v2:free")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free")
+    TOPIC_EXTRACTION_MODEL: str = os.getenv("TOPIC_EXTRACTION_MODEL", "google/gemma-4-26b-a4b-it:free")
+    QUIZ_MODEL: str = os.getenv("QUIZ_MODEL", "google/gemma-4-26b-a4b-it:free")
+    VISION_MODEL: str = os.getenv("VISION_MODEL", "nvidia/nemotron-nano-12b-v2-vl:free")
 
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "5"))
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "512"))
@@ -39,12 +42,15 @@ class Settings:
     CURRICULUM_EF: int = int(os.getenv("CURRICULUM_EF", "40"))
     CURRICULUM_THRESHOLD: float = float(os.getenv("CURRICULUM_THRESHOLD", "0.6"))
     RAG_MIN_SIMILARITY: float = float(os.getenv("RAG_MIN_SIMILARITY", "0.4"))
+    GATEKEEPER_ENABLED: bool = os.getenv("GATEKEEPER_ENABLED", "false").lower() == "true"
 
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5433/adaptive_learning")
-    DB_ECHO_SQL: bool = os.getenv("DB_ECHO_SQL", "false").lower() == "true"
-    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
-    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
-    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+    DKT_ACTIVE: bool = os.getenv("DKT_ACTIVE", "false").lower() == "true"
+    MASTERY_THRESHOLD: float = float(os.getenv("MASTERY_THRESHOLD", "0.7"))
+    BKT_LEARNING_RATE: float = float(os.getenv("BKT_LEARNING_RATE", "0.15"))
+    BKT_P_INIT: float = float(os.getenv("BKT_P_INIT", "0.15"))
+    BKT_P_LEARN: float = float(os.getenv("BKT_P_LEARN", "0.15"))
+    BKT_P_GUESS: float = float(os.getenv("BKT_P_GUESS", "0.15"))
+    BKT_P_SLIP: float = float(os.getenv("BKT_P_SLIP", "0.10"))
 
     def __init__(self):
         if not self.JWT_SECRET or self.JWT_SECRET == "":

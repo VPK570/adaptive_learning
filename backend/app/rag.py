@@ -194,7 +194,7 @@ class RAGPipeline:
         # Record ingestion in document table
         from datetime import datetime
         await db.query(
-            "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, created_at: $time}",
+            "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, doc_type: 'material', created_at: $time}",
             {
                 "course": course_code,
                 "file": document_title,
@@ -268,7 +268,29 @@ class RAGPipeline:
             if not isinstance(bm25_hits, list):
                 bm25_hits = []
 
-            # C. Reciprocal Rank Fusion (RRF)
+            # C. Vector Search (Curriculum)
+            curr_hits = []
+            if content_type is None:
+                curr_query = f"""
+                    SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
+                    FROM curriculum_chunk 
+                    WHERE course_code = $course 
+                    AND embedding <|{k}, {self.ef_search}|> $query_vec
+                """
+                c_params = {"query_vec": query_embedding, "course": course_code}
+                if topic:
+                    curr_query += " AND topic = $topic"
+                    c_params["topic"] = topic
+
+                curr_hits = await db.query(curr_query, c_params)
+                if not isinstance(curr_hits, list):
+                    curr_hits = []
+                curr_hits = [h for h in curr_hits if h.get("similarity", 0) >= settings.RAG_MIN_SIMILARITY]
+                for hit in curr_hits:
+                    hit["distance"] = 1.0 - hit.get("similarity", 0.0)
+                    hit["source_type"] = "curriculum"
+
+            # D. Reciprocal Rank Fusion (RRF)
             rrf_k = self.rrf_k
             scores = {}
             doc_map = {}
@@ -279,6 +301,12 @@ class RAGPipeline:
                 scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (rrf_k + rank + 1)
             
             for rank, doc in enumerate(bm25_hits):
+                doc_id = str(doc["id"])
+                if doc_id not in doc_map:
+                    doc_map[doc_id] = doc
+                scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (rrf_k + rank + 1)
+
+            for rank, doc in enumerate(curr_hits):
                 doc_id = str(doc["id"])
                 if doc_id not in doc_map:
                     doc_map[doc_id] = doc
@@ -323,20 +351,19 @@ class RAGPipeline:
 
     async def get_course_stats(self, course_code: str) -> dict[str, Any]:
         db = await get_db()
-        
-        # Count chunks
+
         text_count_res = await db.query("SELECT count() FROM text_chunk WHERE course_code = $code GROUP ALL", {"code": course_code})
         img_count_res = await db.query("SELECT count() FROM image_chunk WHERE course_code = $code GROUP ALL", {"code": course_code})
-        
+
         text_chunks = text_count_res[0]["count"] if isinstance(text_count_res, list) and len(text_count_res) > 0 else 0
         image_chunks = img_count_res[0]["count"] if isinstance(img_count_res, list) and len(img_count_res) > 0 else 0
-        
-        # Topics and documents
+
         topics_res = await db.query("SELECT topic, count() as count FROM (SELECT topic FROM text_chunk WHERE course_code = $code) GROUP BY topic", {"code": course_code})
-        
+
         docs_text = await db.query("SELECT source_title FROM text_chunk WHERE course_code = $code GROUP BY source_title", {"code": course_code})
         docs_img = await db.query("SELECT source_title FROM image_chunk WHERE course_code = $code GROUP BY source_title", {"code": course_code})
-        
+        docs_curr = await db.query("SELECT source_title FROM curriculum_chunk WHERE course_code = $code GROUP BY source_title", {"code": course_code})
+
         all_doc_names = set()
         if isinstance(docs_text, list):
             for r in docs_text:
@@ -344,7 +371,12 @@ class RAGPipeline:
         if isinstance(docs_img, list):
             for r in docs_img:
                 all_doc_names.add(r["source_title"])
-        
+
+        curr_doc_names = set()
+        if isinstance(docs_curr, list):
+            for r in docs_curr:
+                curr_doc_names.add(r["source_title"])
+
         return {
             "course_code": course_code,
             "total_chunks": text_chunks + image_chunks,
@@ -352,7 +384,29 @@ class RAGPipeline:
             "image_chunks": image_chunks,
             "topics": [{"topic": r["topic"], "chunks": r["count"]} for r in (topics_res if isinstance(topics_res, list) else []) if r.get("topic")],
             "documents": [{"name": name} for name in all_doc_names],
+            "curriculum_docs": [{"name": name} for name in curr_doc_names],
         }
+
+    async def get_batch_stats(self, course_codes: list[str]) -> dict[str, dict[str, Any]]:
+        if not course_codes:
+            return {}
+        db = await get_db()
+        text_res = await db.query(
+            "SELECT course_code, count() as total FROM text_chunk WHERE course_code IN $codes GROUP BY course_code",
+            {"codes": course_codes},
+        ) or []
+        img_res = await db.query(
+            "SELECT course_code, count() as total FROM image_chunk WHERE course_code IN $codes GROUP BY course_code",
+            {"codes": course_codes},
+        ) or []
+        text_counts = {r["course_code"]: r["total"] for r in text_res}
+        img_counts = {r["course_code"]: r["total"] for r in img_res}
+        result = {}
+        for cc in course_codes:
+            tc = text_counts.get(cc, 0)
+            ic = img_counts.get(cc, 0)
+            result[cc] = {"total_chunks": tc + ic, "chunk_count": tc + ic, "documents": []}
+        return result
 
     async def delete_course(self, course_code: str) -> int:
         db = await get_db()

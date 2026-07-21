@@ -19,6 +19,8 @@ class QueryRequest(BaseModel):
     top_k: int = Field(5, ge=1, le=20)
     language: str = Field("English", max_length=MAX_LANGUAGE_LENGTH)
     mastery: float | None = Field(None, ge=0.0, le=1.0)
+    bloom_level: int | None = Field(None, ge=1, le=6)
+    image_ids: list[str] = Field(default_factory=list, max_length=5)
 
 
 class QueryResponse(BaseModel):
@@ -75,6 +77,7 @@ class QuizRequest(BaseModel):
     course_code: str = Field(..., max_length=MAX_COURSE_CODE_LENGTH)
     topic: str = Field(..., max_length=MAX_TOPIC_LENGTH)
     count: int = Field(5, ge=1, le=20)
+    bloom_levels: list[int] | None = Field(None, min_length=1, max_length=6)
 
 
 class SaveQuizRequest(BaseModel):
@@ -82,3 +85,5 @@ class SaveQuizRequest(BaseModel):
     topic: str = Field(..., max_length=MAX_TOPIC_LENGTH)
     questions: list[dict]
     score: int = Field(..., ge=0)
+    total: int = Field(..., ge=0)
+    bloom_levels: list[int] | None = None

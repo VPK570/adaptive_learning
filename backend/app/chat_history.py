@@ -1,17 +1,15 @@
-from app.db import SurrealDBManager
+from app.db import get_db
 
 
-async def get_course_history(course_code, session_id, user_id=None):
-    db = await SurrealDBManager.get_db()
+async def get_course_history(course_code: str, session_id: str, user_id: str | None = None) -> list[dict]:
+    db = await get_db()
+    query = "SELECT * FROM chat_message WHERE course_code = $code AND session_id = $sid"
     params = {"code": course_code, "sid": session_id}
-    extra = ""
     if user_id:
-        extra = " AND user_id = $uid"
+        query += " AND user_id = $uid"
         params["uid"] = user_id
-    result = await db.query(
-        f"SELECT * FROM chat_message WHERE course_code = $code AND session_id = $sid{extra} ORDER BY timestamp ASC",
-        params,
-    )
+    query += " ORDER BY timestamp ASC"
+    result = await db.query(query, params)
     rows = result if result else []
     return [
         {
@@ -26,22 +24,19 @@ async def get_course_history(course_code, session_id, user_id=None):
     ]
 
 
-async def add_message(course_code, session_id, role, content, user_id=None):
-    db = await SurrealDBManager.get_db()
+async def add_message(course_code: str, session_id: str, role: str, content: str, user_id: str = ""):
+    db = await get_db()
     await db.query(
-        "CREATE chat_message CONTENT { user_id: $uid, course_code: $code, session_id: $sid, message_role: $role, content: $content }",
-        {"uid": user_id or "", "code": course_code, "sid": session_id, "role": role, "content": content},
+        "CREATE chat_message CONTENT { course_code: $code, session_id: $sid, message_role: $role, content: $content, user_id: $uid }",
+        {"code": course_code, "sid": session_id, "role": role, "content": content, "uid": user_id},
     )
 
 
-async def clear_course_history(course_code, session_id, user_id=None):
-    db = await SurrealDBManager.get_db()
+async def clear_course_history(course_code: str, session_id: str, user_id: str | None = None):
+    db = await get_db()
+    query = "DELETE chat_message WHERE course_code = $code AND session_id = $sid"
     params = {"code": course_code, "sid": session_id}
-    extra = ""
     if user_id:
-        extra = " AND user_id = $uid"
+        query += " AND user_id = $uid"
         params["uid"] = user_id
-    await db.query(
-        f"DELETE chat_message WHERE course_code = $code AND session_id = $sid{extra}",
-        params,
-    )
+    await db.query(query, params)

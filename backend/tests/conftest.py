@@ -1,12 +1,10 @@
 """Pytest configuration — ChromaDB and SurrealDB."""
 
 import os
-import pytest
 import pytest_asyncio
 from pathlib import Path
 from app.db import SurrealDBManager
 
-os.environ.setdefault("CHROMA_PATH", "/tmp/test_chroma_db")
 os.environ.setdefault("SURREAL_NS", "test_ns")
 os.environ.setdefault("SURREAL_DB", "test_db")
 
@@ -27,8 +25,10 @@ async def surreal_db():
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup_surreal(surreal_db):
     yield
-    await surreal_db.query(
-        "REMOVE TABLE course; REMOVE TABLE text_chunk; "
-        "REMOVE TABLE chat_history; REMOVE TABLE flashcard_set; "
-        "REMOVE TABLE quiz; REMOVE TABLE query_log;"
-    )
+    for tbl in ("course", "text_chunk", "chat_message", "flashcard_set",
+                "quiz", "query_log", "knowledge_state", "topic_prerequisite", "question_log",
+                "document", "curriculum_chunk"):
+        try:
+            await surreal_db.query(f"REMOVE TABLE {tbl}")
+        except Exception:
+            pass

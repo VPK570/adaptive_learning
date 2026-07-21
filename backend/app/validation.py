@@ -10,6 +10,9 @@ MAX_COURSE_NAME_LENGTH = 100
 MAX_DESCRIPTION_LENGTH = 500
 MAX_LANGUAGE_LENGTH = 20
 MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB limit
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB per image
+MAX_IMAGES_PER_MESSAGE = 5
+ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png"}
 
 # --- Regex Patterns ---
 # Only allow alphanumeric, underscores, and hyphens for IDs and codes
@@ -46,17 +49,11 @@ def validate_id(id_str: str) -> bool:
     return True
 
 def validate_course_code(course_code: str) -> str:
-    """Validates and sanitizes course code."""
     if not course_code:
-        return "BAECE102" # Default or raise error
-    
-    # Check length
+        raise ValueError("Course code is required")
     code = course_code.strip()[:MAX_COURSE_CODE_LENGTH]
-    
-    # Sanitize for ChromaDB and paths
     if not SAFE_ID_PATTERN.match(code):
         code = sanitize_id(code)
-    
     return code
 
 def sanitize_text(text: str, max_length: int) -> str:

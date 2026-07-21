@@ -6,6 +6,7 @@ Supports:
 - Chat completions (with thinking model support)
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ class OpenRouterClient:
         self.base_url = settings.OPENROUTER_BASE_URL
         self.embedding_model = settings.EMBEDDING_MODEL
         self.llm_model = settings.LLM_MODEL
+        self.vision_model = settings.VISION_MODEL
         self._client = httpx.AsyncClient(
             timeout=120,
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
@@ -43,21 +45,33 @@ class OpenRouterClient:
         }
 
     async def _api_post(self, path: str, json_body: dict, timeout: int = 30, context: str = "") -> dict:
-        try:
-            response = await self._client.post(
-                f"{self.base_url}{path}",
-                headers=self._headers(),
-                json=json_body,
-                timeout=timeout,
-            )
-        except httpx.HTTPStatusError as e:
-            logger.error(f"[{context}] HTTP {e.response.status_code}: {e.response.text[:300]}")
-            raise ValueError(f"HTTP {e.response.status_code}: {e.response.text[:200]}")
-        if not response.is_success:
-            body = response.text
-            logger.error(f"[{context}] HTTP {response.status_code}: {body[:300]}")
-            raise ValueError(f"{context} failed: {body[:200]}")
-        return response.json()
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = await self._client.post(
+                    f"{self.base_url}{path}",
+                    headers=self._headers(),
+                    json=json_body,
+                    timeout=timeout,
+                )
+                if response.is_success:
+                    return response.json()
+                body = response.text[:200]
+                logger.error("[%s] attempt %d HTTP %d: %s", context, attempt + 1, response.status_code, body)
+                if 400 <= response.status_code < 500:
+                    raise ValueError(f"{context} HTTP {response.status_code}: {body}")
+                raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
+            except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                last_error = e
+                if attempt < 2:
+                    wait = 2 ** attempt
+                    logger.info("[%s] retrying in %ds (attempt %d/3)", context, wait, attempt + 1)
+                    await asyncio.sleep(wait)
+                    continue
+                raise ValueError(f"[{context}] failed after 3 retries: {e}")
+            except ValueError:
+                raise
+        raise ValueError(f"[{context}] failed after 3 retries: {last_error}")
 
     async def health_check(self) -> bool:
         try:
@@ -141,15 +155,30 @@ class OpenRouterClient:
             raise ValueError(f"Missing 'data' key: {str(data)[:200]}")
         return data["data"][0]["embedding"]
 
+    @staticmethod
+    def _build_content(text: str, images: list[dict] | None = None) -> str | list[dict]:
+        if not images:
+            return text
+        parts: list[dict] = [{"type": "text", "text": text}]
+        for img in images:
+            parts.append({"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}})
+        return parts
+
     async def chat(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 1024,
         disable_thinking: bool = True,
+        images: list[dict] | None = None,
     ) -> str:
         model = model or self.llm_model
+        if images:
+            model = self.vision_model
+            messages = [dict(m) for m in messages]
+            if messages and messages[-1].get("role") == "user":
+                messages[-1]["content"] = self._build_content(messages[-1]["content"], images)
         request_body: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
         if disable_thinking:
             request_body["thinking"] = {"type": "disabled"}
@@ -159,12 +188,18 @@ class OpenRouterClient:
 
     async def stream(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 1024,
+        images: list[dict] | None = None,
     ):
         model = model or self.llm_model
+        if images:
+            model = self.vision_model
+            messages = [dict(m) for m in messages]
+            if messages and messages[-1].get("role") == "user":
+                messages[-1]["content"] = self._build_content(messages[-1]["content"], images)
         request_body: dict[str, Any] = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": True}
 
         async with self._client.stream(
@@ -197,14 +232,50 @@ class OpenRouterClient:
         messages: list[dict[str, str]],
         response_schema: dict[str, Any],
         model: str | None = None,
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
         model = model or self.llm_model
-        data = await self._api_post("/chat/completions", {
+
+        # Embed schema as JSON example in the system message.
+        # OpenRouter's response_format.schema requires specific model support
+        # and a different format (type: json_schema). For broad compatibility,
+        # we use type: json_object + prompt injection instead.
+        schema_json = json.dumps(response_schema, indent=2)
+        schema_instruction = f"\n\nReturn ONLY valid JSON matching this schema (no markdown, no explanation):\n{schema_json}"
+
+        if messages and messages[0].get("role") == "system":
+            messages = [
+                {"role": "system", "content": messages[0]["content"] + schema_instruction},
+                *messages[1:],
+            ]
+        else:
+            messages = [
+                {"role": "system", "content": f"Return valid JSON matching this schema:\n{schema_json}"},
+                *messages,
+            ]
+
+        body = {
             "model": model, "messages": messages,
-            "response_format": {"type": "json_object", "schema": response_schema},
+            "response_format": {"type": "json_object"},
             "temperature": 0.2, "thinking": {"type": "disabled"},
-        }, timeout=120, context="chat_with_schema")
-        return json.loads(data["choices"][0]["message"]["content"])
+        }
+        if max_tokens is not None:
+            body["max_tokens"] = max_tokens
+        data = await self._api_post("/chat/completions", body, timeout=120, context="chat_with_schema")
+
+        content = data["choices"][0]["message"]["content"]
+        logger.info("[chat_with_schema] raw content (first 500 chars): %s", content[:500])
+
+        # Strip markdown code fences if present
+        content = content.strip()
+        if content.startswith("```"):
+            first_nl = content.find("\n")
+            content = content[first_nl + 1:] if first_nl != -1 else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+        return json.loads(content)
 
 
 _client_singleton: OpenRouterClient | None = None

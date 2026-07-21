@@ -2,7 +2,6 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, patch
 from app.curriculum import CurriculumManager
-from app.db import get_db, SurrealDBManager
 
 
 @pytest_asyncio.fixture
@@ -11,6 +10,12 @@ async def mock_client():
         mock.embed_text = AsyncMock(return_value=[0.1] * 2048)
         mock.embed_text_batch = AsyncMock(side_effect=lambda texts: [[0.1] * 2048 for _ in texts])
         yield mock
+
+
+@pytest_asyncio.fixture
+async def mock_file_hash():
+    with patch("app.curriculum.calculate_file_hash", return_value="dummy_hash"):
+        yield
 
 
 @pytest_asyncio.fixture
@@ -43,7 +48,7 @@ async def test_schema_initialization(surreal_db):
     tables = result['tables']
     assert 'course' in tables
     assert 'text_chunk' in tables
-    assert 'chat_history' in tables
+    assert 'chat_message' in tables
 
 
 @pytest.mark.asyncio
@@ -54,7 +59,6 @@ async def test_course_crud(surreal_db):
         "course_name": "Test Course",
         "description": "A test course description",
         "icon": "book",
-        "created_at": "2026-06-06T00:00:00"
     })
 
     res = await surreal_db.query("SELECT * FROM course WHERE course_code = 'TEST101'")
@@ -73,22 +77,22 @@ async def test_course_crud(surreal_db):
 
 @pytest.mark.asyncio
 async def test_chat_history_ops(surreal_db):
-    """Verify chat_history operations."""
-    await surreal_db.create("chat_history", {
+    """Verify chat_message operations."""
+    await surreal_db.create("chat_message", {
         "course_code": "CHEM101",
         "session_id": "session1",
-        "role": "user",
+        "message_role": "user",
         "content": "hello",
-        "timestamp": "2026-05-29T12:00:00"
+        "user_id": "",
     })
 
-    res = await surreal_db.query("SELECT * FROM chat_history WHERE session_id = 'session1'")
+    res = await surreal_db.query("SELECT * FROM chat_message WHERE session_id = 'session1'")
     assert len(res) == 1
     assert res[0]['course_code'] == 'CHEM101'
 
 
 @pytest.mark.asyncio
-async def test_curriculum_ingestion_and_retrieval(surreal_db, mock_client, mock_pdf_extractor):
+async def test_curriculum_ingestion_and_retrieval(surreal_db, mock_client, mock_file_hash, mock_pdf_extractor):
     """Test full cycle of curriculum ingestion and retrieval."""
     manager = CurriculumManager()
     course_code = "CSE101"
@@ -110,12 +114,9 @@ async def test_curriculum_ingestion_and_retrieval(surreal_db, mock_client, mock_
 
 
 @pytest.mark.asyncio
-async def test_curriculum_missing_field_auto_fix(surreal_db, mock_client, mock_pdf_extractor):
+async def test_curriculum_missing_field_auto_fix(surreal_db, mock_client, mock_file_hash, mock_pdf_extractor):
     """Test the 'missing field' auto-fix logic in ingest_curriculum."""
     from surrealdb.errors import InternalError
-
-    manager = CurriculumManager()
-    course_code = "CSE102"
 
     original_query = surreal_db.query
     call_count = 0
@@ -124,7 +125,7 @@ async def test_curriculum_missing_field_auto_fix(surreal_db, mock_client, mock_p
         nonlocal call_count
         if "INSERT INTO curriculum_chunk" in query_str and call_count == 0:
             call_count += 1
-            raise InternalError("Found field 'new_field', but no such field exists for table 'curriculum_chunk'")
+            raise InternalError("Internal", "Found field 'new_field', but no such field exists for table 'curriculum_chunk'")
         return await original_query(query_str, vars)
 
     with patch.object(surreal_db, 'query', side_effect=side_effect):
@@ -132,7 +133,11 @@ async def test_curriculum_missing_field_auto_fix(surreal_db, mock_client, mock_p
             mock_pdf_extractor.return_value = [
                 type('Page', (), {'text': 'Some text', 'page_num': 1})()
             ]
-            pass
+            from app.curriculum import CurriculumManager
+            manager = CurriculumManager()
+            result = await manager.ingest_curriculum("CSE101", "Syllabus", "dummy.pdf")
+            assert result["status"] == "success"
+            assert result["chunks_ingested"] == 1
 
 
 @pytest.mark.asyncio
@@ -166,7 +171,7 @@ async def test_analytics_logging(surreal_db):
         course_code=course_code,
         question="What is a cell?",
         response="A cell is the basic unit of life.",
-        cited_sources=[{"title": "Biology 101", "page": 1}]
+        cited_sources=[{"source_title": "Biology 101", "page": "1", "content_type": "text", "has_image": False}]
     )
 
     res = await surreal_db.query("SELECT * FROM query_log WHERE course_code = $code", {"code": course_code})

@@ -4,14 +4,12 @@ import pytest
 
 from app.chunker import chunk_text, clean_text
 from app.citation import (
-    has_citation, extract_all_citations, remove_uncited_claims,
-    format_citation, validate_citations,
+    has_citation, extract_all_citations, format_citation, validate_citations,
 )
 from app.query_engine import (
     build_tutor_system_prompt,
     build_context_window,
     build_tutor_prompt,
-    QueryEngine,
 )
 
 

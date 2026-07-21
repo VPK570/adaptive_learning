@@ -137,6 +137,19 @@ class SurrealDBManager:
 
             DEFINE INDEX IF NOT EXISTS curriculum_embedding_idx ON TABLE curriculum_chunk FIELDS embedding HNSW DIMENSION {dim} DIST COSINE;
 
+            DEFINE TABLE IF NOT EXISTS course_topic SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic_name ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS subtopics ON TABLE course_topic TYPE array;
+            DEFINE FIELD IF NOT EXISTS subtopics[*] ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS prerequisites ON TABLE course_topic TYPE array;
+            DEFINE FIELD IF NOT EXISTS prerequisites[*] ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS learning_objectives ON TABLE course_topic TYPE array;
+            DEFINE FIELD IF NOT EXISTS learning_objectives[*] ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS order_index ON TABLE course_topic TYPE number;
+            DEFINE INDEX IF NOT EXISTS ct_course_topic_idx ON TABLE course_topic FIELDS course_code, topic_name UNIQUE;
+
             DEFINE TABLE IF NOT EXISTS course SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE course TYPE string;
             DEFINE FIELD IF NOT EXISTS course_name ON TABLE course TYPE string;
@@ -149,8 +162,9 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE document TYPE string;
             DEFINE FIELD IF NOT EXISTS filename ON TABLE document TYPE string;
             DEFINE FIELD IF NOT EXISTS content_hash ON TABLE document TYPE string;
+            DEFINE FIELD IF NOT EXISTS doc_type ON TABLE document TYPE string;
             DEFINE FIELD IF NOT EXISTS created_at ON TABLE document TYPE string;
-            DEFINE INDEX IF NOT EXISTS content_hash_idx ON TABLE document FIELDS content_hash UNIQUE;
+            DEFINE INDEX IF NOT EXISTS document_hash_idx ON TABLE document FIELDS course_code, content_hash UNIQUE;
 
             DEFINE TABLE IF NOT EXISTS user SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS user_id ON TABLE user TYPE string;
@@ -176,29 +190,35 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE query_log TYPE string;
             DEFINE FIELD IF NOT EXISTS question ON TABLE query_log TYPE string;
             DEFINE FIELD IF NOT EXISTS response_preview ON TABLE query_log TYPE string;
-            DEFINE FIELD IF NOT EXISTS out_of_scope ON TABLE query_log TYPE bool;
+            DEFINE FIELD IF NOT EXISTS out_of_scope ON TABLE query_log TYPE option<bool> DEFAULT false;
             DEFINE FIELD IF NOT EXISTS cited_sources ON TABLE query_log TYPE array;
+            DEFINE FIELD IF NOT EXISTS cited_sources[*].source_title ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS cited_sources[*].page ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS cited_sources[*].content_type ON TABLE query_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS cited_sources[*].has_image ON TABLE query_log TYPE bool;
             DEFINE FIELD IF NOT EXISTS timestamp ON TABLE query_log TYPE datetime DEFAULT time::now();
             DEFINE INDEX IF NOT EXISTS query_log_course_idx ON TABLE query_log FIELDS course_code;
-
-            DEFINE TABLE IF NOT EXISTS flashcard_set SCHEMAFULL;
-            DEFINE FIELD IF NOT EXISTS user_id ON TABLE flashcard_set TYPE string;
-            DEFINE FIELD IF NOT EXISTS course_code ON TABLE flashcard_set TYPE string;
-            DEFINE FIELD IF NOT EXISTS topic ON TABLE flashcard_set TYPE string;
-            DEFINE FIELD IF NOT EXISTS cards ON TABLE flashcard_set TYPE any;
-            DEFINE FIELD IF NOT EXISTS created_at ON TABLE flashcard_set TYPE datetime DEFAULT time::now();
-            DEFINE INDEX IF NOT EXISTS flashcard_course_idx ON TABLE flashcard_set FIELDS course_code;
 
             DEFINE TABLE IF NOT EXISTS quiz SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS user_id ON TABLE quiz TYPE string;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE quiz TYPE string;
             DEFINE FIELD IF NOT EXISTS topic ON TABLE quiz TYPE string;
+            DEFINE FIELD IF NOT EXISTS bloom_levels ON TABLE quiz TYPE array;
             DEFINE FIELD IF NOT EXISTS questions ON TABLE quiz TYPE any;
             DEFINE FIELD IF NOT EXISTS score ON TABLE quiz TYPE int;
             DEFINE FIELD IF NOT EXISTS total ON TABLE quiz TYPE int;
             DEFINE FIELD IF NOT EXISTS created_at ON TABLE quiz TYPE datetime DEFAULT time::now();
             DEFINE FIELD IF NOT EXISTS completed_at ON TABLE quiz TYPE datetime;
             DEFINE INDEX IF NOT EXISTS quiz_course_idx ON TABLE quiz FIELDS course_code;
+
+            DEFINE TABLE IF NOT EXISTS flashcard_set SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS user_id ON TABLE flashcard_set TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE flashcard_set TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic ON TABLE flashcard_set TYPE string;
+            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE flashcard_set TYPE int;
+            DEFINE FIELD IF NOT EXISTS cards ON TABLE flashcard_set TYPE any;
+            DEFINE FIELD IF NOT EXISTS created_at ON TABLE flashcard_set TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS flashcard_course_idx ON TABLE flashcard_set FIELDS course_code;
 
             DEFINE INDEX IF NOT EXISTS text_chunk_course_idx ON TABLE text_chunk FIELDS course_code;
             DEFINE INDEX IF NOT EXISTS image_chunk_course_idx ON TABLE image_chunk FIELDS course_code;
@@ -208,7 +228,46 @@ class SurrealDBManager:
                 DELETE text_chunk WHERE course_code = $before.course_code;
                 DELETE image_chunk WHERE course_code = $before.course_code;
                 DELETE curriculum_chunk WHERE course_code = $before.course_code;
+                DELETE course_topic WHERE course_code = $before.course_code;
+                DELETE knowledge_state WHERE course_code = $before.course_code;
+                DELETE question_log WHERE course_code = $before.course_code;
+                DELETE topic_prerequisite WHERE course_code = $before.course_code;
             }};
+
+            DEFINE TABLE IF NOT EXISTS knowledge_state SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS student_id ON TABLE knowledge_state TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE knowledge_state TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic_id ON TABLE knowledge_state TYPE string;
+            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE knowledge_state TYPE int;
+            DEFINE FIELD IF NOT EXISTS mastery_score ON TABLE knowledge_state TYPE float;
+            DEFINE FIELD IF NOT EXISTS confidence ON TABLE knowledge_state TYPE float;
+            DEFINE FIELD IF NOT EXISTS stability ON TABLE knowledge_state TYPE float;
+            DEFINE FIELD IF NOT EXISTS difficulty ON TABLE knowledge_state TYPE float;
+            DEFINE FIELD IF NOT EXISTS total_attempts ON TABLE knowledge_state TYPE int;
+            DEFINE FIELD IF NOT EXISTS correct_attempts ON TABLE knowledge_state TYPE int;
+            DEFINE FIELD IF NOT EXISTS streak ON TABLE knowledge_state TYPE int;
+            DEFINE FIELD IF NOT EXISTS last_reviewed_at ON TABLE knowledge_state TYPE datetime;
+            DEFINE FIELD IF NOT EXISTS next_review_at ON TABLE knowledge_state TYPE datetime;
+            DEFINE FIELD IF NOT EXISTS updated_at ON TABLE knowledge_state TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS ks_student_course ON TABLE knowledge_state FIELDS student_id, course_code, topic_id, bloom_level UNIQUE;
+
+            DEFINE TABLE IF NOT EXISTS topic_prerequisite SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE topic_prerequisite TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic_from ON TABLE topic_prerequisite TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic_to ON TABLE topic_prerequisite TYPE string;
+            DEFINE FIELD IF NOT EXISTS prereq_type ON TABLE topic_prerequisite TYPE string;
+            DEFINE INDEX IF NOT EXISTS tp_course_idx ON TABLE topic_prerequisite FIELDS course_code;
+
+            DEFINE TABLE IF NOT EXISTS question_log SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS student_id ON TABLE question_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE question_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS topic_id ON TABLE question_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE question_log TYPE int;
+            DEFINE FIELD IF NOT EXISTS question_text ON TABLE question_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS is_correct ON TABLE question_log TYPE bool;
+            DEFINE FIELD IF NOT EXISTS source ON TABLE question_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS timestamp ON TABLE question_log TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS ql_student_course_idx ON TABLE question_log FIELDS student_id, course_code;
         """
         try:
             await db.query(schema_query)
