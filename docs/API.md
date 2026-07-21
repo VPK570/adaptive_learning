@@ -3,7 +3,7 @@
 ## Overview
 RESTful API built with FastAPI. Base URL: `http://localhost:8001` (or backend container).
 
-All routes are **unauthenticated** — auth endpoints exist but tokens are never validated on protected routes.
+Auth is enforced via middleware on all routes except `/auth`, `/health`, `/docs`, `/openapi.json`, `/redoc`. JWT tokens are validated on every request.
 
 ---
 
@@ -64,9 +64,7 @@ Form fields:
 
 Response: same as `TokenResponse` above.
 
-> **Note:** JWT tokens are issued but **never validated** on other routes. Auth layer exists but is not enforced.
-
----
+> **Note:** JWT tokens are validated on every request via auth middleware. Protected routes require a valid Bearer token.
 
 ### Ingestion
 
@@ -172,28 +170,6 @@ Response: JSON array of question objects:
 ]
 ```
 
-**`POST /quiz/save`**
-
-Save a quiz attempt.
-
-Request body:
-```json
-{
-  "course_code": "BAECE102",
-  "topic": "Flip-flops",
-  "questions": [/* array from /quiz */],
-  "score": 4
-}
-```
-
-**`GET /quiz/saved`**
-
-List saved quizzes for a course. Query param: `course=BAECE102`.
-
-**`DELETE /quiz/saved/{quiz_id}`**
-
-Delete a saved quiz. Returns `{"status": "success"}`.
-
 ---
 
 ### Flashcards
@@ -220,27 +196,6 @@ Response: JSON array:
   }
 ]
 ```
-
-**`POST /flashcards/save`**
-
-Save a flashcard set.
-
-Request body:
-```json
-{
-  "course_code": "BAECE102",
-  "topic": "Karnaugh Maps",
-  "cards": [/* array from /flashcards */]
-}
-```
-
-**`GET /flashcards/saved`**
-
-List saved flashcard sets. Query param: `course=BAECE102`.
-
-**`DELETE /flashcards/saved/{set_id}`**
-
-Delete a flashcard set. Returns `{"status": "success"}`.
 
 ---
 
@@ -343,6 +298,70 @@ Get curriculum coverage metrics. Query param: `course_code`.
 **`GET /questions`**
 
 Get all asked questions with metadata. Query param: `course_code`.
+
+---
+
+### User Management
+
+**`GET /users/me`**
+
+Get current user profile. Requires auth.
+
+**`PUT /users/me`**
+
+Update current user profile.
+
+Request body:
+```json
+{
+  "name": "Updated Name"
+}
+```
+
+---
+
+### Admin
+
+**`GET /admin/stats`**
+
+Get platform-wide statistics. Requires admin role.
+
+**`GET /admin/users`**
+
+List all users. Requires admin role.
+
+---
+
+### Learning Path
+
+**`GET /api/learning-path/recommendations`**
+
+Get personalized topic recommendations. Query param: `course_code`.
+
+**`POST /api/learning-path/update-mastery`**
+
+Update mastery for a topic.
+
+Request body:
+```json
+{
+  "course_code": "BAECE102",
+  "topic": "Flip-flops",
+  "correct": true
+}
+```
+
+---
+
+### Tasks (Celery)
+
+**`GET /tasks/{task_id}`**
+
+Check status of a background task.
+
+**`POST /tasks/trigger/ingest`**
+
+Trigger a scheduled ingestion task.
 
 ---
 

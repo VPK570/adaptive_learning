@@ -9,13 +9,13 @@
 
 - **FastAPI entry:** `backend/server.py` — mounts 9 routers (query, courses, analytics, chat, ingestion, flashcards, quiz, paper, auth).
 - **SurrealDB** is the real DB. Postgres service was removed from docker-compose (nothing uses it).
-- **Auth exists but is dead code:** `auth.py` has JWT + bcrypt, login/register endpoints work, but **no route uses `Depends(get_current_user)`**. Frontend stores tokens in localStorage but never sends them.
+- **Auth exists but is dead code:** `auth.py` has JWT + bcrypt, login/register endpoints work, but **no route uses `Depends(get_current_user)`**. Frontend stores tokens in localStorage and the axios interceptor (`client.ts`) attaches Bearer tokens on every request — but the backend never validates them.
 - **Schema dimension gotcha:** SurrealDB HNSW indexes are hardcoded to `DIMENSION 2048` in `db.py`. README says 384 (text) / 1024 (image) — ignore README, the code is right.
 
 ## Frontend (new_frontend)
 
-- **All pages use mock data** (`src/lib/mockData.ts`) except the login page. Backend has working endpoints for quiz, flashcards, chat-history, courses, analytics, generate-paper, ingest — none are wired up.
-- **API client** (`src/lib/api.js`) only handles login/register. Needs extension to cover all endpoints with Bearer token support.
+- **No mock data** — all pages call real API endpoints via `src/lib/api/`. The now-removed mock data note is stale.
+- **API client** (`src/lib/api/`) has full coverage: auth, users, courses, quiz, flashcards, chat, analytics, ingestion, paper, admin. Interceptor auto-attaches Bearer token from auth store on every request.
 - **CSS:** Custom properties in `globals.css` + per-page CSS modules (`page.module.css`). No Tailwind.
 
 ## Commands

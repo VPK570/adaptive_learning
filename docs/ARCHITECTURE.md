@@ -2,19 +2,19 @@
 
 ## Overview
 
-The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learning system. It uses three storage systems (SurrealDB, ChromaDB, JSON files), two frontends, and OpenRouter for all AI/embedding workloads.
+The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learning system. It uses SurrealDB as the primary database, and OpenRouter for all AI/embedding workloads.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         FRONTENDS                                   │
 │  ┌─────────────────────────┐  ┌──────────────────────────────────┐  │
-│  │  frontend/ (production)│  │  new_frontend/ (experimental)    │  │
-│  │  Next.js 16, Tailwind   │  │  Next.js 16, plain CSS vars     │  │
-│  │  Dockerized (:3000)     │  │  Mock-data based                │  │
-│  └─────────────┬───────────┘  └──────────────┬───────────────────┘  │
-└────────────────┼──────────────────────────────┼──────────────────────┘
-                 │                              │
-                 ▼                              ▼
+│  │  new_frontend/            │  │
+│  │  Next.js 16, plain CSS   │  │
+│  │  Dockerized (:3000)      │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+                 │
+                 ▼
         ┌───────────────────────────────────────────┐
         │           BACKEND (FastAPI :8001)          │
         │                                            │
@@ -30,17 +30,18 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
         │  │   │                   curriculum)       │
         │  │   ├── courses.py     (CRUD + curriculum │
         │  │   │                   topics)           │
-        │  │   ├── quiz.py        (generate, save,   │
-        │  │   │                   list, delete)     │
-        │  │   ├── flashcards.py  (generate, save,   │
-        │  │   │                   list, delete)     │
+         │  │   ├── quiz.py        (generate)          │
+         │  │   ├── flashcards.py  (generate)          │
         │  │   ├── analytics.py   (analytics,        │
         │  │   │                   unanswered,       │
         │  │   │                   coverage,         │
         │  │   │                   questions)         │
-        │  │   ├── chat.py        (get, save,        │
-        │  │   │                   clear history)    │
-        │  │   └── paper.py       (generate-paper)   │
+         │  │   ├── chat.py        (history CRUD)      │
+         │  │   ├── paper.py       (generate-paper)   │
+         │  │   ├── users.py       (profile)           │
+         │  │   ├── admin.py       (stats + users)     │
+         │  │   ├── learning_path.py (recommendations)│
+         │  │   └── tasks.py       (Celery tasks)      │
         │  ├── app/rag.py         (RAG pipeline)     │
         │  ├── app/query_engine.py(Socratic engine)  │
         │  ├── app/openrouter.py  (LLM client)       │
@@ -49,15 +50,14 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
         │  ├── app/analytics.py   (analytics logic)  │
         │  ├── app/courses.py     (course CRUD)      │
         │  ├── app/chat_history.py(chat persistence) │
-        │  ├── app/saved_content.py(quiz/flashcard   │
-        │  │                       persistence)      │
+         │  ├── app/learning_path.py(ZPD recs)         │
         │  ├── app/paper_generator.py                │
         │  ├── app/chunker.py     (text chunking)    │
         │  ├── app/citation.py    (citation enforce) │
         │  ├── app/gatekeeper.py  (relevance filter) │
         │  ├── app/verifier.py    (grounding check)  │
         │  ├── app/pdf_extractor.py(PDF text+images) │
-        │  ├── app/evaluator.py   (RAGAS eval)       │
+        │  ├── app/evaluator.py   (RAGAS eval)        │
         │  ├── app/validation.py  (input sanitize)   │
         │  ├── app/auth.py        (JWT helpers)      │
         │  ├── app/config.py      (env config)       │
@@ -65,16 +65,15 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
         │  └── app/deps.py        (FastAPI DI)       │
         └───────────────┬───────────────────────────┘
                         │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-   ┌──────────┐  ┌──────────┐  ┌────────────┐
-   │ SurrealDB│  │ ChromaDB │  │ JSON Files │
-   │ (:8000)  │  │ (local)  │  │ (legacy)   │
-   │ File-based│  │ text_    │  │ chat_hist, │
-   │ persistent│  │ chunks + │  │ quizzes,   │
-   │ Docker    │  │ image_   │  │ flashcards │
-   │ service   │  │ chunks   │  │            │
-   └──────────┘  └──────────┘  └────────────┘
+                      ▼
+               ┌──────────┐
+               │ SurrealDB│
+               │ (:8000)  │
+               │ File-based│
+               │ persistent│
+               │ Docker   │
+               │ service  │
+               └──────────┘
                         │
                         ▼
                   ┌──────────┐
@@ -94,14 +93,10 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
 - **Schema**: Recreated on startup via `_init_schema()` — no migration system
 - **Access**: Direct SurrealQL queries (no ORM/abstraction layer)
 
-### ChromaDB (Vector Store)
-- **Two collections**: `text_chunks` (384-dim) and `image_chunks` (1024-dim)
-- **Location**: `./chroma_db/` (gitignored)
-- **Usage**: Hybrid BM25 + vector similarity search with RRF fusion
-
-### JSON Files (Legacy)
-- Course data, chat history, saved quizzes/flashcards stored in `./legacy_data/`
-- Being migrated to SurrealDB
+### Vector Search
+- Hybrid BM25 + vector similarity search with RRF fusion (all in SurrealDB)
+- HNSW indexes on `text_chunk.embedding`, `image_chunk.embedding`, `curriculum_chunk.embedding`
+- Dimension probed dynamically at startup via OpenRouter embedding call
 
 ## AI Pipeline
 
@@ -122,7 +117,7 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
 
 ### Performance
 - Single query: ~2-5s (3 LLM calls: gatekeeper, strategy, answer)
-- PDF ingestion (15MB): ~20-40s (blocking, no background job)
+- PDF ingestion (15MB): ~20-40s (blocked by Celery task or inline)
 - Batch embedding: single-batch, no parallelism
 
 ## Services (Docker Compose)
@@ -132,33 +127,17 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
 | `surrealdb` | ✅ Active | Persistent file mode, port 8000 |
 | `backend` | ✅ Active | FastAPI, port 8001 |
 | `frontend` | ✅ Active | Next.js 16, port 3000 |
-| `postgres` | ❌ Dead | Defined but no code connects to it |
+| `redis` | ✅ Active | Celery broker |
+| `worker` | ✅ Active | Celery worker for background tasks |
 
 ## Auth
 
-An auth layer exists (`backend/app/routers/auth.py` and `backend/app/auth.py`) with JWT token issuance. However:
-- No route has `Depends(get_current_user)` or token validation middleware
-- Auth endpoints (`/auth/register`, `/auth/login`) work but tokens are never enforced
-- CORS is now configurable via `CORS_ORIGINS` env var (not wildcard `*`)
-
-## Two Frontends
-
-| Aspect | `frontend/` | `new_frontend/` |
-|--------|------------|-----------------|
-| Purpose | Production Dockerized UI | Experimental prototype |
-| Styling | Tailwind CSS v4 | Plain CSS custom properties |
-| Language | TypeScript | JavaScript |
-| Data source | Real API calls | Mock data (`src/lib/mockData.js`) |
-| Dockerized | Yes (Dockerfile in repo) | No |
+Auth is enforced via a middleware in `server.py` that validates Bearer JWT tokens on all routes except `/auth`, `/health`, `/docs`. Role-based access control is available via `require_role()` decorator from `app/auth.py` (used by admin, ingestion, and paper routers).
 
 ## Key Technical Debt
-- No DI/IoC — global singletons at module level
-- No background job system — `POST /ingest` blocks the API server
-- Fake token counting (`len(text.split())`) — all chunk boundaries wrong
-- New HTTPX client per API call — no connection pooling
+- No DI/IoC — global singletons at module level  
+- Fake token counting (`len(text.split())`) — all chunk boundaries approximate
 - `print()` statements instead of structured logging
 - `except: pass` silently swallows errors in PDF extraction
-- Single file server.py (568 lines) — all routes, models, and lifespan in one module
 - No database abstraction layer — direct SurrealQL in every module
 - SurrealDB connection manager has deadlock risk on failed connection
-- Postgres service defined but unused
