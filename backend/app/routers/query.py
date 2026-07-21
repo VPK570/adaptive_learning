@@ -45,12 +45,12 @@ def _load_images(image_ids: list[str]) -> list[dict]:
 @router.get("/health")
 async def health():
     from app.db import SurrealDBManager
-    from app.openrouter import client
+    from app.provider_router import router
     
     surreal_ok = await SurrealDBManager.health_check()
-    openrouter_ok = await client.health_check()
+    provider_ok = await router.health_check()
     
-    deps_ok = [surreal_ok, openrouter_ok]
+    deps_ok = [surreal_ok, provider_ok]
     status = "ok" if all(deps_ok) else "degraded"
     
     return {
@@ -58,7 +58,7 @@ async def health():
         "version": "1.0.0",
         "dependencies": {
             "surrealdb": "ok" if surreal_ok else "error",
-            "openrouter": "ok" if openrouter_ok else "error"
+            "gemini": "ok" if provider_ok else "error"
         }
     }
 

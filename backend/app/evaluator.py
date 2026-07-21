@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-from app.openrouter import client
+from app.provider_router import router as client
 
 
 class RG:

@@ -9,7 +9,7 @@ from app.db import get_db
 from app.rag import RAGPipeline
 from app.schemas import FlashcardRequest, SaveFlashcardRequest
 from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
-from app.openrouter import client
+from app.provider_router import router as client
 from app.config import settings
 
 logger = logging.getLogger(__name__)

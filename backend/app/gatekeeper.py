@@ -1,5 +1,5 @@
 from typing import Optional, Tuple
-from app.openrouter import client
+from app.provider_router import router as client
 import logging
 logger = logging.getLogger(__name__)
 class Gatekeeper:

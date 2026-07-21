@@ -1,5 +1,5 @@
 from typing import List
-from app.openrouter import client
+from app.provider_router import router as client
 
 async def generate_paper(course_code: str, total_marks: int, difficulty: str, topics: List[str], chunks: List[dict]):
     context_text = "\n\n".join([f"Source: {c['source_title']} (Page {c['page']})\nContent: {c['text']}" for c in chunks])
