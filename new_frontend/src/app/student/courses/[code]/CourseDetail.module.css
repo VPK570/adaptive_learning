@@ -204,10 +204,135 @@
   line-height: 1.65;
 }
 
+.msgText p {
+  margin: 0 0 var(--space-3) 0;
+}
+
+.msgText p:last-child {
+  margin-bottom: 0;
+}
+
+.msgText strong {
+  font-weight: 600;
+  color: var(--color-on-background);
+}
+
+.msgText ul,
+.msgText ol {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+}
+
+.msgText li {
+  margin-bottom: var(--space-1);
+}
+
+.msgText code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9em;
+  background-color: var(--color-surface-container-high);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.msgText pre {
+  background-color: var(--color-surface-container-high);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: var(--space-3) 0;
+}
+
+.msgText pre code {
+  background: none;
+  padding: 0;
+}
+
+.msgText blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: var(--space-4);
+  margin: var(--space-3) 0;
+  color: var(--color-on-surface-variant);
+}
+
+.msgText h1,
+.msgText h2,
+.msgText h3 {
+  font-weight: 600;
+  margin: var(--space-4) 0 var(--space-2) 0;
+}
+
+.msgText a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.msgText table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--space-3) 0;
+}
+
+.msgText th,
+.msgText td {
+  border: 1px solid var(--color-outline-variant);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.msgText th {
+  background-color: var(--color-surface-container);
+  font-weight: 600;
+}
+
 .assistantContent {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* ── Thinking / Reasoning Block ──────────────────────────────── */
+.thinkingBlock {
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.thinkingSummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font: var(--text-label-md);
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+  user-select: none;
+  background-color: var(--color-surface-container);
+  transition: background-color var(--transition-fast);
+}
+
+.thinkingSummary:hover {
+  background-color: var(--color-surface-container-high);
+}
+
+.thinkingChevron {
+  transition: transform var(--transition-fast);
+}
+
+.thinkingBlock[open] .thinkingChevron {
+  transform: rotate(180deg);
+}
+
+.thinkingContent {
+  padding: var(--space-3);
+  font: var(--text-body-sm);
+  color: var(--color-on-surface-variant);
+  line-height: 1.6;
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-outline-variant);
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
 }
 
 .bulletList {
@@ -269,6 +394,141 @@
 
 .msgActionBtn:hover {
   color: var(--color-on-surface);
+}
+
+/* ── Bloom's Level Selector ─────────────────────────────────── */
+.bloomSelector {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.bloomToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-container);
+  color: var(--color-on-surface-variant);
+  font: var(--text-label-md);
+  border: 1px solid var(--color-outline-variant);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bloomToggle:hover {
+  background-color: var(--color-surface-container-high);
+}
+
+.bloomDropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 10;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.bloomOption {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  color: var(--color-on-background);
+  font: var(--text-body-md);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  border: none;
+}
+
+.bloomOption:hover {
+  background-color: var(--color-surface-container);
+}
+
+/* ── Chat Images ────────────────────────────────────────────── */
+.msgImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.msgImage {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-outline-variant);
+  object-fit: cover;
+}
+
+.previewRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.previewChip {
+  position: relative;
+  display: inline-flex;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-outline-variant);
+}
+
+.previewThumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+}
+
+.previewRemove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.imageBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-outline);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  border: none;
+  cursor: pointer;
+}
+
+.imageBtn:hover {
+  color: var(--color-on-surface);
+  background-color: var(--color-surface-container-high);
+}
+
+.imageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── Chat Input ──────────────────────────────────────────────── */

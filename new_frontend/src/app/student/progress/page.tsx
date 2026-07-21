@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
-import ProgressBar from '@/app/components/ProgressBar';
+
 import Badge from '@/app/components/Badge';
 import { coursesApi } from '@/lib/api/courses';
 import { analyticsApi } from '@/lib/api/analytics';
@@ -25,7 +25,7 @@ export default function LearningProgress() {
         const topics: string[] = [];
         const revisions: string[] = [];
         await Promise.all(list.map(c =>
-          analyticsApi.get(c.course_code)
+          analyticsApi.getMy(c.course_code)
             .then((data: Analytics) => {
               if (controller.signal.aborted) return;
               if (data?.weak_topics) topics.push(...data.weak_topics);
@@ -79,11 +79,7 @@ export default function LearningProgress() {
                 ) : (
                   weakTopics.map((topic, i) => (
                     <div key={i} className={styles.topicItem}>
-                      <div className={styles.topicHeader}>
-                        <span className={styles.topicName}>{topic}</span>
-                        <span className={styles.topicPercent}>needs review</span>
-                      </div>
-                      <ProgressBar percent={30} intensity={2} />
+                      <span className={styles.topicName}>{topic}</span>
                     </div>
                   ))
                 )}

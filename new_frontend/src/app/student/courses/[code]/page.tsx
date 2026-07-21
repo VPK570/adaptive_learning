@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Send, BookOpen, Sparkles, Copy, ThumbsUp, Zap } from 'lucide-react';
+import { FileText, Send, BookOpen, Sparkles, Copy, ThumbsUp, Zap, ChevronDown, ImageIcon, X } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+const BLOOM_LABELS = ['Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 'Create'] as const;
 import AppShell from '@/app/components/AppShell';
 import Badge from '@/app/components/Badge';
 import ProgressBar from '@/app/components/ProgressBar';
@@ -11,15 +15,23 @@ import { chatApi } from '@/lib/api/chat';
 import type { Course, ChatMessage } from '@/lib/api/types';
 import styles from './CourseDetail.module.css';
 
-export default function CourseDetailPage({ params }: { params: { code: string } }) {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
+export default function CourseDetailPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
-  const code = params?.code || '';
+  const { code } = use(params);
   const [course, setCourse] = useState<Course | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [bloomLevel, setBloomLevel] = useState<number | null>(null);
+  const [bloomOpen, setBloomOpen] = useState(false);
+  const [imageIds, setImageIds] = useState<string[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<{ id: string; url: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const sessionId = `course_${code}`;
 
   useEffect(() => {
@@ -35,7 +47,8 @@ export default function CourseDetailPage({ params }: { params: { code: string } 
         const msgs = (Array.isArray(history) ? history : []).map((h, i) => ({
           id: i + 1,
           role: h.role,
-          text: h.content || h.text || '',
+          text: h.role === 'user' ? (() => { try { const p = JSON.parse(h.content || ''); return p.text || ''; } catch {} return h.content || ''; })() : (h.content || h.text || ''),
+          images: h.role === 'user' ? (() => { try { const p = JSON.parse(h.content || ''); return p.images || []; } catch {} return []; })() : undefined,
         }));
         setMessages(msgs);
       })
@@ -48,25 +61,52 @@ export default function CourseDetailPage({ params }: { params: { code: string } 
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const imageId = await chatApi.uploadImage(file, sessionId);
+      setImageIds(prev => [...prev, imageId]);
+      setImagePreviews(prev => [...prev, { id: imageId, url: URL.createObjectURL(file), name: file.name }]);
+    } catch (err) {
+      console.error('Upload failed', err);
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [sessionId]);
+
+  const removeImage = useCallback((id: string) => {
+    setImageIds(prev => prev.filter(i => i !== id));
+    setImagePreviews(prev => { const p = prev.filter(x => x.id !== id); return p; });
+  }, []);
+
   const handleSend = useCallback(() => {
-    if (!inputValue.trim() || streaming || !course) return;
+    if ((!inputValue.trim() && imageIds.length === 0) || streaming || !course) return;
     const userText = inputValue;
-    const userMsg: ChatMessage = { id: Date.now(), role: 'user', text: userText };
+    const userMsg: ChatMessage = { id: Date.now(), role: 'user', text: userText, images: [...imageIds] };
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
+    setImageIds([]);
+    setImagePreviews([]);
     setStreaming(true);
 
     const assistantId = Date.now() + 1;
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '', thinkingText: '' }]);
 
     let fullText = '';
 
     chatApi.queryStream(
-      { question: userText, course_code: code, session_id: sessionId },
+      { question: userText, course_code: code, session_id: sessionId, bloom_level: bloomLevel, image_ids: imageIds.length > 0 ? imageIds : undefined },
       (content) => {
         fullText += content;
         setMessages(prev => prev.map(m =>
           m.id === assistantId ? { ...m, text: (m.text || '') + content } : m
+        ));
+      },
+      (content) => {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId ? { ...m, thinkingText: (m.thinkingText || '') + content } : m
         ));
       },
       (meta) => {
@@ -82,7 +122,7 @@ export default function CourseDetailPage({ params }: { params: { code: string } 
     );
 
     chatApi.saveMessage(code, sessionId, 'user', userText).catch(() => {});
-  }, [inputValue, streaming, course, code, sessionId]);
+  }, [inputValue, streaming, course, code, sessionId, imageIds, bloomLevel]);
 
   const breadcrumbs = [
     { label: 'Dashboard', href: '/student/dashboard' },
@@ -156,7 +196,25 @@ export default function CourseDetailPage({ params }: { params: { code: string } 
               messages.map(msg => (
                 <div key={msg.id} className={`${styles.messageBubble} ${styles[msg.role]}`}>
                   <div className={styles.assistantContent}>
-                    <p className={styles.msgText}>{msg.text}</p>
+                    {msg.images && msg.images.length > 0 && (
+                      <div className={styles.msgImages}>
+                        {msg.images.map(imgId => (
+                          <img key={imgId} src={`${API_BASE}/chat-images/${imgId}`} alt="Uploaded" className={styles.msgImage} />
+                        ))}
+                      </div>
+                    )}
+                    {msg.role === 'assistant' && msg.thinkingText && (
+                      <details className={styles.thinkingBlock}>
+                        <summary className={styles.thinkingSummary}>
+                          <ChevronDown size={14} className={styles.thinkingChevron} />
+                          Show reasoning
+                        </summary>
+                        <div className={styles.thinkingContent}>{msg.thinkingText}</div>
+                      </details>
+                    )}
+                    <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]}>
+                      {msg.text}
+                    </ReactMarkdown>
                     {msg.sources && msg.sources.length > 0 && (
                       <div className={styles.sourcesBlock}>
                         <span className={styles.sourcesLabel}>Sources:</span>
@@ -181,6 +239,32 @@ export default function CourseDetailPage({ params }: { params: { code: string } 
           </div>
 
           <div className={styles.chatInputArea}>
+            <div className={styles.bloomSelector}>
+              <button className={styles.bloomToggle} onClick={() => setBloomOpen(!bloomOpen)}>
+                {bloomLevel ? `L${bloomLevel}: ${BLOOM_LABELS[bloomLevel - 1]}` : 'Auto'}
+                <ChevronDown size={14} />
+              </button>
+              {bloomOpen && (
+                <div className={styles.bloomDropdown}>
+                  <button className={styles.bloomOption} onClick={() => { setBloomLevel(null); setBloomOpen(false); }}>Auto (detect)</button>
+                  {[1,2,3,4,5,6].map(l => (
+                    <button key={l} className={styles.bloomOption} onClick={() => { setBloomLevel(l); setBloomOpen(false); }}>
+                      L{l}: {BLOOM_LABELS[l - 1]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {imagePreviews.length > 0 && (
+              <div className={styles.previewRow}>
+                {imagePreviews.map(p => (
+                  <div key={p.id} className={styles.previewChip}>
+                    <img src={p.url} alt={p.name} className={styles.previewThumb} />
+                    <button className={styles.previewRemove} onClick={() => removeImage(p.id)}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className={styles.inputWrapper}>
               <textarea
                 className={styles.chatInput}
@@ -190,10 +274,14 @@ export default function CourseDetailPage({ params }: { params: { code: string } 
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 rows={1}
               />
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" hidden onChange={handleImageSelect} />
+              <button className={styles.imageBtn} onClick={() => fileInputRef.current?.click()} disabled={streaming || uploading || imageIds.length >= 5}>
+                <ImageIcon size={18} />
+              </button>
               <button
-                className={`${styles.sendBtn} ${inputValue.trim() && !streaming ? styles.sendActive : ''}`}
+                className={`${styles.sendBtn} ${(inputValue.trim() || imageIds.length > 0) && !streaming ? styles.sendActive : ''}`}
                 onClick={handleSend}
-                disabled={!inputValue.trim() || streaming}
+                disabled={(!inputValue.trim() && imageIds.length === 0) || streaming}
               >
                 <Send size={18} />
               </button>
