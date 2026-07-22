@@ -4,13 +4,14 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth import get_current_user
-from app.deps import get_rag
+from app.config import settings
 from app.db import get_db
+from app.deps import get_rag
+from app.knowledge_state import BLOOM_LABELS
+from app.provider_router import router as client
 from app.rag import RAGPipeline
 from app.schemas import FlashcardRequest, SaveFlashcardRequest
-from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
-from app.provider_router import router as client
-from app.config import settings
+from app.validation import MAX_TOPIC_LENGTH, sanitize_text, validate_course_code
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -45,8 +46,13 @@ async def generate_flashcards(
 
     context = "\n".join([c["text"] for c in chunks if c.get("text")])
 
+    bloom_instruction = ""
+    if body.bloom_levels:
+        labels = [BLOOM_LABELS.get(bl, f"Level {bl}") for bl in body.bloom_levels]
+        bloom_instruction = f" Generate flashcards at these Bloom's Taxonomy levels: {', '.join(labels)}."
+
     prompt = f"""Based on the following course materials, generate {body.count} flashcards for the topic: {topic}.
-Return ONLY a JSON array of objects, each with 'question', 'answer', and 'bloom_level' (integer 1-6) fields.
+{bloom_instruction}Return ONLY a JSON array of objects, each with 'question', 'answer', and 'bloom_level' (integer 1-6) fields.
 Ensure the JSON is complete and valid. Do not truncate the output.
 
 MATERIALS:

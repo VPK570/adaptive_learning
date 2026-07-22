@@ -1,15 +1,18 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth import get_current_user
-from app.deps import get_rag
-from app.db import get_db
-from app.rag import RAGPipeline
-from app.schemas import QuizRequest, SaveQuizRequest
-from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
-from app.provider_router import router as client
-from app.routers.flashcards import safe_json_parse
-from app.knowledge_state import BLOOM_LABELS
+from app.bloom_classifier import classify_bloom_levels
 from app.config import settings
+from app.db import get_db
+from app.deps import get_knowledge_state, get_rag
+from app.knowledge_state import BLOOM_LABELS, KnowledgeStateManager
+from app.provider_router import router as client
+from app.rag import RAGPipeline
+from app.routers.flashcards import safe_json_parse
+from app.schemas import QuizRequest, SaveQuizRequest
+from app.validation import MAX_TOPIC_LENGTH, sanitize_text, validate_course_code
 
 router = APIRouter()
 
@@ -61,6 +64,15 @@ MATERIALS:
     result = safe_json_parse(response)
     if result is None:
         raise HTTPException(500, "Failed to generate valid JSON for quiz.")
+
+    if settings.BLOOM_VALIDATION_ENABLED:
+        questions = [q["question"] for q in result if q.get("question")]
+        if questions:
+            detected = await classify_bloom_levels(questions)
+            for i, d in enumerate(detected):
+                if d is not None and i < len(result):
+                    result[i]["bloom_level"] = d
+
     return result
 
 
@@ -68,10 +80,21 @@ MATERIALS:
 async def save_quiz(
     body: SaveQuizRequest,
     request: Request,
+    ks: KnowledgeStateManager = Depends(get_knowledge_state),
 ):
     course_code = validate_course_code(body.course_code)
     topic = sanitize_text(body.topic, MAX_TOPIC_LENGTH)
     user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
+    student_id = user_email
+
+    updates = []
+    for q in body.questions:
+        bloom_level = q.get("bloom_level")
+        is_correct = q.get("is_correct", False)
+        if bloom_level and 1 <= bloom_level <= 6:
+            updates.append(ks.update_state(student_id, course_code, topic, bloom_level, is_correct))
+    if updates:
+        await asyncio.gather(*updates)
 
     from app.db import get_db
     db = await get_db()

@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import require_role
 from app.deps import get_rag
+from app.paper_generator import generate_paper
 from app.rag import RAGPipeline
 from app.schemas import PaperRequest
-from app.validation import validate_course_code, sanitize_text, MAX_TOPIC_LENGTH
-from app.paper_generator import generate_paper
+from app.validation import MAX_TOPIC_LENGTH, sanitize_text, validate_course_code
 
 router = APIRouter()
 
@@ -35,5 +35,6 @@ async def create_paper(
         difficulty=body.difficulty,
         topics=sanitized_topics,
         chunks=chunks,
+        bloom_levels=body.bloom_levels,
     )
     return paper

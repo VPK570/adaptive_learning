@@ -6,15 +6,17 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.deps import get_rag, get_engine
-from app.rag import RAGPipeline
+from app.bloom_classifier import classify_bloom_level
+from app.deps import get_engine, get_knowledge_state, get_rag
+from app.knowledge_state import KnowledgeStateManager
 from app.query_engine import QueryEngine
-from app.schemas import QueryRequest, QueryResponse, ChunkItem
+from app.rag import RAGPipeline
+from app.schemas import ChatFeedbackRequest, ChunkItem, QueryRequest, QueryResponse
 from app.validation import (
-    validate_course_code,
+    MAX_QUESTION_LENGTH,
     sanitize_id,
     sanitize_text,
-    MAX_QUESTION_LENGTH,
+    validate_course_code,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,13 +48,13 @@ def _load_images(image_ids: list[str]) -> list[dict]:
 async def health():
     from app.db import SurrealDBManager
     from app.provider_router import router
-    
+
     surreal_ok = await SurrealDBManager.health_check()
     provider_ok = await router.health_check()
-    
+
     deps_ok = [surreal_ok, provider_ok]
     status = "ok" if all(deps_ok) else "degraded"
-    
+
     return {
         "status": status,
         "version": "1.0.0",
@@ -61,6 +63,23 @@ async def health():
             "gemini": "ok" if provider_ok else "error"
         }
     }
+
+
+@router.post("/chat/feedback")
+async def chat_feedback(
+    body: ChatFeedbackRequest,
+    request: Request,
+    ks: KnowledgeStateManager = Depends(get_knowledge_state),
+):
+    user_email = request.state.user.get("email", "")
+    if not user_email:
+        raise HTTPException(401, "Not authenticated")
+    course_code = validate_course_code(body.course_code)
+    bloom = await classify_bloom_level(body.question)
+    if bloom is None:
+        return {"status": "skipped", "reason": "could not classify"}
+    await ks.update_state(user_email, course_code, "general", bloom, body.helpful)
+    return {"status": "updated", "bloom_level": bloom}
 
 
 @router.get("/stats")
@@ -105,7 +124,7 @@ async def query_stream(
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
     user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
 
-    from app.chat_history import get_course_history, add_message
+    from app.chat_history import add_message, get_course_history
 
     history = await get_course_history(body.course_code, body.session_id)
 
@@ -161,7 +180,7 @@ async def query(
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
     user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
 
-    from app.chat_history import get_course_history, add_message
+    from app.chat_history import add_message, get_course_history
 
     history = await get_course_history(body.course_code, body.session_id)
 
