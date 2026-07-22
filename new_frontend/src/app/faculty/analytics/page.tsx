@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import AppShell from '@/app/components/AppShell';
 import { api } from '@/lib/api/client';
 import { coursesApi } from '@/lib/api/courses';
-import { BarChart3, AlertTriangle, Lightbulb, Sparkles, CheckCircle, Clock, Zap } from 'lucide-react';
+import { BarChart3, AlertTriangle, Lightbulb, Sparkles, CheckCircle, Clock, Zap, BookOpen, Check, X } from 'lucide-react';
 import type { Analytics, Course } from '@/lib/api/types';
 import styles from './Analytics.module.css';
 
@@ -92,6 +92,10 @@ export default function FacultyAnalyticsPage() {
   const suggestedRevision = analytics?.suggested_revision || [];
   const topQuestions = analytics?.top_questions || [];
   const recentQuestions = analytics?.recent_questions || [];
+  const topicCoverage = analytics?.topic_coverage || [];
+
+  const coveredTopics = topicCoverage.filter(t => t.status === 'covered');
+  const missingTopics = topicCoverage.filter(t => t.status === 'missing');
 
   const tableData = questions.slice(0, 10);
 
@@ -283,6 +287,38 @@ export default function FacultyAnalyticsPage() {
             )}
           </div>
         </div>
+
+        {topicCoverage.length > 0 && (
+          <div className={styles.sectionCard}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+              <BookOpen size={20} style={{ color: 'var(--color-primary)' }} />
+              <h3 style={{ font: 'var(--text-headline-sm)', color: 'var(--color-on-surface)' }}>Topic Coverage</h3>
+              <span style={{ marginLeft: 'auto', font: 'var(--text-label-md)', color: 'var(--color-on-surface-variant)' }}>
+                {coveredTopics.length} of {topicCoverage.length} topics covered
+              </span>
+            </div>
+            <div className={styles.coverageBar}>
+              <div className={styles.coverageFill} style={{ width: `${topicCoverage.length ? (coveredTopics.length / topicCoverage.length) * 100 : 0}%` }} />
+            </div>
+            <div className={styles.coverageList}>
+              {topicCoverage.map(t => (
+                <div key={t.topic_name} className={styles.coverageItem}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                    {t.status === 'covered'
+                      ? <Check size={16} style={{ color: 'var(--color-secondary)', flexShrink: 0 }} />
+                      : <X size={16} style={{ color: 'var(--color-error)', flexShrink: 0 }} />
+                    }
+                    <span className={styles.coverageTopic}>{t.topic_name}</span>
+                    <span className={styles.coverageBloom} style={{ flexShrink: 0 }}>{t.bloom_level}</span>
+                  </div>
+                  <span style={{ font: 'var(--text-label-md)', color: 'var(--color-on-surface-variant)', flexShrink: 0 }}>
+                    {t.chunk_count} chunks
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className={styles.tableCard}>
           <div className={styles.tableHeader}>

@@ -119,6 +119,12 @@ export interface SavedFlashcardSet {
   created_at: string;
 }
 
+export interface ChatFeedbackRequest {
+  question: string;
+  course_code: string;
+  helpful: boolean;
+}
+
 // Chat
 export interface QueryRequest {
   question: string;
@@ -142,6 +148,24 @@ export interface ChatMessage {
   sources?: { file?: string; page?: number; source_title?: string }[];
 }
 
+// Structured Topics (from course_topic)
+export interface StructuredTopic {
+  topic_name: string;
+  subtopics: string[];
+  prerequisites: string[];
+  bloom_level: string;
+  learning_objectives: string[];
+  order_index: number;
+}
+
+export interface TopicCoverageItem {
+  topic_name: string;
+  status: 'covered' | 'missing';
+  chunk_count: number;
+  subtopics: string[];
+  bloom_level: string;
+}
+
 // Analytics
 export interface Analytics {
   total_queries?: number;
@@ -149,6 +173,8 @@ export interface Analytics {
   questions_per_day?: Record<string, number>;
   weak_topics?: string[];
   suggested_revision?: string[];
+  topic_coverage?: TopicCoverageItem[];
+  bloom_mastery?: Record<number, number>;
   recent_questions?: { id: string; course_code: string; question: string; timestamp: string | null; out_of_scope: boolean }[];
 }
 
@@ -159,6 +185,7 @@ export interface PaperRequest {
   difficulty?: string;
   topics?: string[];
   top_k?: number;
+  bloom_levels?: number[];
 }
 
 export interface GeneratedPaper {

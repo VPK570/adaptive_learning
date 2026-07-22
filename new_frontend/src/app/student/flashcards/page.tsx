@@ -5,7 +5,11 @@ import AppShell from '@/app/components/AppShell';
 import { flashcardsApi } from '@/lib/api/flashcards';
 import { coursesApi } from '@/lib/api/courses';
 import { Sparkles } from 'lucide-react';
-import type { Flashcard, SavedFlashcardSet, Course } from '@/lib/api/types';
+import type { Flashcard, SavedFlashcardSet, Course, StructuredTopic } from '@/lib/api/types';
+
+const BLOOM_MAP: Record<string, string> = {
+  Remember: '1', Understand: '2', Apply: '3', Analyze: '4', Evaluate: '5', Create: '6',
+};
 import styles from './Flashcards.module.css';
 
 export default function FlashcardsPage() {
@@ -15,6 +19,7 @@ export default function FlashcardsPage() {
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState(15);
   const [bloomLevel, setBloomLevel] = useState('1');
+  const [topics, setTopics] = useState<StructuredTopic[]>([]);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -39,6 +44,28 @@ export default function FlashcardsPage() {
       if (list.length > 0) setCourseCode(list[0].course_code);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!courseCode) return;
+    coursesApi.getStructuredTopics(courseCode).then(data => {
+      const list = Array.isArray(data) ? data : [];
+      setTopics(list);
+      if (list.length > 0) {
+        setTopic(list[0].topic_name);
+        const bl = BLOOM_MAP[list[0].bloom_level];
+        if (bl) setBloomLevel(bl);
+      }
+    }).catch(() => {});
+  }, [courseCode]);
+
+  const handleTopicChange = (value: string) => {
+    setTopic(value);
+    const match = topics.find(t => t.topic_name === value);
+    if (match) {
+      const bl = BLOOM_MAP[match.bloom_level];
+      if (bl) setBloomLevel(bl);
+    }
+  };
 
   useEffect(() => {
     if (phase === 'studying') {
@@ -159,7 +186,14 @@ export default function FlashcardsPage() {
                   </div>
                   <div className={styles.formRow}>
                     <label>Topic Focus</label>
-                    <input className={styles.inputField} placeholder="e.g. Backpropagation" value={topic} onChange={e => setTopic(e.target.value)} />
+                    <select className={styles.selectField} value={topic} onChange={e => handleTopicChange(e.target.value)}>
+                      {topics.length === 0 && <option value="">No topics available</option>}
+                      {topics.map(t => (
+                        <option key={t.topic_name} value={t.topic_name}>
+                          {t.topic_name} ({t.bloom_level})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className={styles.formRow}>
                     <label>Card Count</label>
@@ -174,7 +208,10 @@ export default function FlashcardsPage() {
                     <select className={styles.selectField} value={bloomLevel} onChange={e => setBloomLevel(e.target.value)}>
                       <option value="1">Bloom's: Remember</option>
                       <option value="2">Bloom's: Understand</option>
+                      <option value="3">Bloom's: Apply</option>
                       <option value="4">Bloom's: Analyze</option>
+                      <option value="5">Bloom's: Evaluate</option>
+                      <option value="6">Bloom's: Create</option>
                     </select>
                   </div>
                 </div>

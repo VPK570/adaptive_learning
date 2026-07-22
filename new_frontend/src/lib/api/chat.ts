@@ -1,6 +1,6 @@
 import { api } from './client';
 import { useAuthStore } from '@/lib/store/authStore';
-import type { ChatMessage, QueryRequest } from './types';
+import type { ChatMessage, QueryRequest, ChatFeedbackRequest } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
@@ -27,6 +27,9 @@ export const chatApi = {
     api.post('/chat-history', null, { params: { course_code: courseCode, session_id: sessionId, role, content } }).then(r => r.data),
   clearHistory: (courseCode: string, sessionId: string) =>
     api.delete('/chat-history', { params: { course_code: courseCode, session_id: sessionId } }).then(r => r.data),
+
+  feedback: (data: ChatFeedbackRequest) =>
+    api.post<{ status: string; bloom_level?: number }>('/chat/feedback', data).then(r => r.data),
 
   queryStream: (
     body: QueryRequest,

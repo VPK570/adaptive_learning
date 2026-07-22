@@ -13,6 +13,11 @@ import { paperApi } from '@/lib/api/paper';
 import type { GeneratedPaper, PaperQuestion } from '@/lib/api/types';
 import styles from './Generate.module.css';
 
+const BLOOM_LEVEL_MAP: Record<string, number> = {
+  Remember: 1, Understand: 2, Apply: 3,
+  Analyze: 4, Evaluate: 5, Create: 6,
+};
+
 const defaultSections = [
   { id: 'sec-1', title: 'Section A', questions: 5, marksPerQ: 2 },
   { id: 'sec-2', title: 'Section B', questions: 5, marksPerQ: 5 },
@@ -58,11 +63,16 @@ export default function QuestionPaperGenerator() {
     setGenerating(true);
     setError('');
     try {
+      const selectedLevels = Object.entries(bloomLevels)
+        .filter(([, v]) => v)
+        .map(([level]) => BLOOM_LEVEL_MAP[level])
+        .filter((v): v is number => v !== undefined);
       const result = await paperApi.generate({
         course_code: courseName.split(':')[0].trim(),
         total_marks: parseInt(totalMarks) || 100,
         difficulty: difficultyFromBloom(),
         topics: sections.map(s => s.title),
+        bloom_levels: selectedLevels.length > 0 ? selectedLevels : undefined,
       });
       setPaper(result);
       setStep('preview');

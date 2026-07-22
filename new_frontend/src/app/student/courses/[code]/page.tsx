@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, Send, BookOpen, Sparkles, Copy, ThumbsUp, Zap, ChevronDown, ImageIcon, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 const BLOOM_LABELS = ['Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 'Create'] as const;
 import AppShell from '@/app/components/AppShell';
@@ -16,6 +17,13 @@ import type { Course, ChatMessage } from '@/lib/api/types';
 import styles from './CourseDetail.module.css';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
+function cite(text: string) {
+  return text.replace(
+    /\[(Source|Curriculum):([^\]]*)\]/g,
+    (_, type, rest) => `<cite class="citation-inline">${type}:${rest}</cite>`
+  );
+}
 
 export default function CourseDetailPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
@@ -30,6 +38,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [imagePreviews, setImagePreviews] = useState<{ id: string; url: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [feedbackLoading, setFeedbackLoading] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sessionId = `course_${code}`;
@@ -124,6 +133,16 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
     chatApi.saveMessage(code, sessionId, 'user', userText).catch(() => {});
   }, [inputValue, streaming, course, code, sessionId, imageIds, bloomLevel]);
 
+  const handleFeedback = useCallback(async (msgId: number, helpful: boolean) => {
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    if (!lastUser || !course || feedbackLoading[msgId]) return;
+    setFeedbackLoading(prev => ({ ...prev, [msgId]: true }));
+    try {
+      await chatApi.feedback({ question: lastUser.text || '', course_code: code, helpful });
+    } catch { /* silently fail */ }
+    setFeedbackLoading(prev => ({ ...prev, [msgId]: false }));
+  }, [messages, course, code, feedbackLoading]);
+
   const breadcrumbs = [
     { label: 'Dashboard', href: '/student/dashboard' },
     { label: course?.course_name || code }
@@ -212,8 +231,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
                         <div className={styles.thinkingContent}>{msg.thinkingText}</div>
                       </details>
                     )}
-                    <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]}>
-                      {msg.text}
+                    <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                      {cite(msg.text)}
                     </ReactMarkdown>
                     {msg.sources && msg.sources.length > 0 && (
                       <div className={styles.sourcesBlock}>
@@ -228,7 +247,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
                     {msg.role === 'assistant' && msg.text && (
                       <div className={styles.msgActions}>
                         <button className={styles.msgActionBtn}><Copy size={14} /> Copy</button>
-                        <button className={styles.msgActionBtn}><ThumbsUp size={14} /> Helpful</button>
+                        <button className={styles.msgActionBtn} onClick={() => handleFeedback(msg.id, true)} disabled={feedbackLoading[msg.id]}>
+                          <ThumbsUp size={14} /> {feedbackLoading[msg.id] ? '...' : 'Helpful'}
+                        </button>
                       </div>
                     )}
                   </div>

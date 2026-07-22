@@ -285,6 +285,18 @@
   font-weight: 600;
 }
 
+.assistantContent :global(.citation-inline) {
+  display: inline;
+  font: var(--text-label-md);
+  font-style: italic;
+  color: var(--color-on-surface-variant);
+  background-color: var(--color-surface-container);
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-outline-variant);
+  white-space: nowrap;
+}
+
 .assistantContent {
   display: flex;
   flex-direction: column;

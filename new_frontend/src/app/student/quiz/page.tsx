@@ -4,8 +4,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import AppShell from '@/app/components/AppShell';
 import { quizApi } from '@/lib/api/quiz';
 import { coursesApi } from '@/lib/api/courses';
+import { analyticsApi } from '@/lib/api/analytics';
 import { Library, CheckCircle, SlidersHorizontal, BarChart3, Timer, Check, Lightbulb, ArrowRight, Trophy, X } from 'lucide-react';
-import type { QuizQuestion, SavedQuiz, Course } from '@/lib/api/types';
+import type { QuizQuestion, SavedQuiz, Course, StructuredTopic } from '@/lib/api/types';
 import styles from './Quiz.module.css';
 
 const BLOOM_LEVELS = [
@@ -17,6 +18,10 @@ const BLOOM_LEVELS = [
   { level: 6, label: 'Create' },
 ];
 
+const BLOOM_MAP: Record<string, number> = {
+  Remember: 1, Understand: 2, Apply: 3, Analyze: 4, Evaluate: 5, Create: 6,
+};
+
 export default function QuizPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
@@ -24,6 +29,7 @@ export default function QuizPage() {
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState(10);
   const [bloomLevels, setBloomLevels] = useState<number[]>([1, 3]);
+  const [topics, setTopics] = useState<StructuredTopic[]>([]);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -45,6 +51,18 @@ export default function QuizPage() {
   }, [courseCode]);
 
   useEffect(() => {
+    if (!courseCode) return;
+    analyticsApi.getMy(courseCode).then(data => {
+      if (data.bloom_mastery && Object.keys(data.bloom_mastery).length > 0) {
+        const weak = BLOOM_LEVELS
+          .filter(bl => (data.bloom_mastery![bl.level] ?? 0) < 0.7)
+          .map(bl => bl.level);
+        if (weak.length > 0) setBloomLevels(weak);
+      }
+    }).catch(() => {});
+  }, [courseCode]);
+
+  useEffect(() => {
     fetchSaved();
     coursesApi.list().then(list => {
       setCourses(list);
@@ -54,6 +72,26 @@ export default function QuizPage() {
       }
     }).catch(() => {});
   }, [fetchSaved]);
+
+  useEffect(() => {
+    if (!courseCode) return;
+    coursesApi.getStructuredTopics(courseCode).then(data => {
+      const list = Array.isArray(data) ? data : [];
+      setTopics(list);
+      if (list.length > 0) {
+        setTopic(list[0].topic_name);
+      }
+    }).catch(() => {});
+  }, [courseCode]);
+
+  const handleTopicChange = (value: string) => {
+    setTopic(value);
+    const match = topics.find(t => t.topic_name === value);
+    if (match) {
+      const bl = BLOOM_MAP[match.bloom_level];
+      if (bl) setBloomLevels([bl]);
+    }
+  };
 
   useEffect(() => {
     if (questions.length > 0 && !showResults) {
@@ -158,7 +196,7 @@ export default function QuizPage() {
                 <div className={styles.courseGrid}>
                   {courses.map((c) => (
                     <label key={c.course_code} className={`${styles.courseOption} ${courseCode === c.course_code ? styles.courseOptionActive : ''}`}>
-                      <input type="radio" name="course" checked={courseCode === c.course_code} onChange={() => { setCourseCode(c.course_code); setTopic(c.course_name); }} />
+                      <input type="radio" name="course" checked={courseCode === c.course_code} onChange={() => setCourseCode(c.course_code)} />
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
                           <span className={styles.courseCode}>{c.course_code}</span>
@@ -171,11 +209,9 @@ export default function QuizPage() {
                 </div>
                 <div style={{ marginTop: 'var(--space-6)' }}>
                   <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>Topic Focus</p>
-                  <input
-                    type="text"
+                  <select
                     value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Dynamic Programming"
+                    onChange={(e) => handleTopicChange(e.target.value)}
                     style={{
                       width: '100%',
                       background: 'var(--color-surface-container-low)',
@@ -185,8 +221,16 @@ export default function QuizPage() {
                       fontSize: 14,
                       color: 'var(--color-on-surface)',
                       outline: 'none',
+                      cursor: 'pointer',
                     }}
-                  />
+                  >
+                    {topics.length === 0 && <option value="">No topics available</option>}
+                    {topics.map(t => (
+                      <option key={t.topic_name} value={t.topic_name}>
+                        {t.topic_name} ({t.bloom_level})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
