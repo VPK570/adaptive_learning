@@ -1,9 +1,10 @@
 import hashlib
 from typing import Any
-from app.config import settings
+
 from app.chunker import chunk_text, clean_text
-from app.provider_router import router as client
+from app.config import settings
 from app.db import get_db
+from app.provider_router import router as client
 
 
 def calculate_file_hash(filepath: str) -> str:
@@ -46,16 +47,17 @@ class RAGPipeline:
         embeddings = await client.embed_text_batch(chunk_texts)
         db = await get_db()
 
-        from app.chunker import extract_page_for_chunk
         import re
+
+        from app.chunker import extract_page_for_chunk
 
         chunks_to_insert = []
         for i, (text_chunk, start, end) in enumerate(raw_chunks):
             if not text_chunk.strip():
                 continue
-            
+
             page_num = extract_page_for_chunk(text_chunk, cleaned, start)
-            
+
             # Clean markers from the chunk text before storing
             text_chunk_clean = re.sub(r"\[Page \d+\]", "", text_chunk).strip()
             if not text_chunk_clean:
@@ -148,7 +150,7 @@ class RAGPipeline:
     ) -> dict[str, Any]:
         db = await get_db()
         content_hash = calculate_file_hash(filepath)
-        
+
         # Check if already ingested
         existing = await db.query(
             "SELECT id FROM document WHERE course_code = $course AND content_hash = $hash",
@@ -223,12 +225,11 @@ class RAGPipeline:
         db = await get_db()
 
         text_results = []
-        image_results = []
 
         # 1. Hybrid Search (Text)
         if content_type is None or content_type == "text":
             query_embedding = await client.embed_text(query)
-            
+
             # A. Vector Search
             vector_query = f"""
                 SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
@@ -240,33 +241,16 @@ class RAGPipeline:
             if topic:
                 vector_query += " AND topic = $topic"
                 v_params["topic"] = topic
-            
+
             vector_hits = await db.query(vector_query, v_params)
             if not isinstance(vector_hits, list):
                 vector_hits = []
-            
+
             # Apply similarity threshold
             vector_hits = [h for h in vector_hits if h.get("similarity", 0) >= settings.RAG_MIN_SIMILARITY]
-            
+
             for hit in vector_hits:
                 hit["distance"] = 1.0 - hit.get("similarity", 0.0)
-
-            # B. BM25 Search
-            bm25_query = f"""
-                SELECT *, search::score(0) AS bm25_score 
-                FROM text_chunk 
-                WHERE course_code = $course 
-                AND text @0@ $query
-                LIMIT {k}
-            """
-            b_params = {"query": query, "course": course_code}
-            if topic:
-                bm25_query += " AND topic = $topic"
-                b_params["topic"] = topic
-            
-            bm25_hits = await db.query(bm25_query, b_params)
-            if not isinstance(bm25_hits, list):
-                bm25_hits = []
 
             # C. Vector Search (Curriculum)
             curr_hits = []
@@ -299,12 +283,6 @@ class RAGPipeline:
                 doc_id = str(doc["id"])
                 doc_map[doc_id] = doc
                 scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (rrf_k + rank + 1)
-            
-            for rank, doc in enumerate(bm25_hits):
-                doc_id = str(doc["id"])
-                if doc_id not in doc_map:
-                    doc_map[doc_id] = doc
-                scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (rrf_k + rank + 1)
 
             for rank, doc in enumerate(curr_hits):
                 doc_id = str(doc["id"])
@@ -317,37 +295,7 @@ class RAGPipeline:
             for doc in text_results:
                 doc["chunk_id"] = str(doc["id"])
 
-        # 2. Vector Search (Image)
-        if content_type is None or content_type == "image":
-            query_embedding = await client.embed_image(query)
-            img_query = f"""
-                SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity 
-                FROM image_chunk 
-                WHERE course_code = $course 
-                AND embedding <|{k}, {self.ef_search}|> $query_vec
-                """
-            image_hits = await db.query(img_query, {"query_vec": query_embedding, "course": course_code})
-            if not isinstance(image_hits, list):
-                image_hits = []
-
-            # Apply similarity threshold
-            image_hits = [h for h in image_hits if h.get("similarity", 0) >= settings.RAG_MIN_SIMILARITY]
-
-            for row in image_hits:
-                row["chunk_id"] = str(row["id"])
-                row["distance"] = 1.0 - row.get("similarity", 0.0)
-                image_results.append(row)
-
-        if content_type == "text":
-            return text_results
-        if content_type == "image":
-            image_results.sort(key=lambda x: x.get("distance", 1.0))
-            return image_results
-
-        # Combined results
-        all_results = text_results + image_results
-        # Simple heuristic to interleave or sort combined
-        return all_results[:k*2]
+        return text_results
 
     async def get_course_stats(self, course_code: str) -> dict[str, Any]:
         db = await get_db()
@@ -422,7 +370,7 @@ class RAGPipeline:
         db = await get_db()
         res_text = await db.query("SELECT course_code FROM text_chunk GROUP BY course_code")
         res_img = await db.query("SELECT course_code FROM image_chunk GROUP BY course_code")
-        
+
         all_courses = set()
         if isinstance(res_text, list):
             for r in res_text:
@@ -430,5 +378,5 @@ class RAGPipeline:
         if isinstance(res_img, list):
             for r in res_img:
                 all_courses.add(r["course_code"])
-                
+
         return sorted(list(all_courses))
