@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends
 
-from app.auth import get_current_user, require_role
-from app.validation import validate_course_code
 from app.analytics import (
-    get_analytics,
     get_all_questions,
-    get_unanswered_questions,
+    get_analytics,
     get_coverage,
     get_my_analytics,
+    get_unanswered_questions,
 )
+from app.auth import get_current_user, require_role
+from app.gap_detection import detect_gaps
+from app.validation import validate_course_code
 
 router = APIRouter()
 
@@ -41,3 +42,14 @@ async def coverage(course_code: str = "BAECE102", _=Depends(require_role("facult
 async def questions(course_code: str = "BAECE102", _=Depends(require_role("faculty", "admin"))):
     course_code = validate_course_code(course_code)
     return await get_all_questions(course_code)
+
+
+@router.get("/analytics/gaps")
+async def gaps(
+    course_code: str = "BAECE102",
+    topic_id: str | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    course_code = validate_course_code(course_code)
+    result = await detect_gaps(current_user["email"], course_code, topic_id)
+    return {"gaps": result}
