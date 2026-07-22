@@ -87,3 +87,6 @@ docs/superpowers/
 new_frontend/.auth/
 new_frontend/playwright-report/
 new_frontend/test-results/
+
+# RAG documentation
+docs/RAG_FIX_PLAN.md
