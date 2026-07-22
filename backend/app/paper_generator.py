@@ -1,9 +1,17 @@
 from typing import List
+
+from app.knowledge_state import BLOOM_LABELS
 from app.provider_router import router as client
 
-async def generate_paper(course_code: str, total_marks: int, difficulty: str, topics: List[str], chunks: List[dict]):
+
+async def generate_paper(course_code: str, total_marks: int, difficulty: str, topics: List[str], chunks: List[dict], bloom_levels: list[int] | None = None):
     context_text = "\n\n".join([f"Source: {c['source_title']} (Page {c['page']})\nContent: {c['text']}" for c in chunks])
-    
+
+    bloom_instruction = ""
+    if bloom_levels:
+        labels = [BLOOM_LABELS.get(bl, f"Level {bl}") for bl in bloom_levels]
+        bloom_instruction = f"\n    Distribute questions across these Bloom's Taxonomy levels: {', '.join(labels)}."
+
     prompt = f"""
     You are an expert academic examiner. Generate a structured question paper for the course {course_code}.
     
@@ -15,9 +23,9 @@ async def generate_paper(course_code: str, total_marks: int, difficulty: str, to
     {context_text}
     
     Distribution Guidelines:
-    - Use Bloom's Taxonomy (Knowledge, Understanding, Application, Analysis).
+    - Use Bloom's Taxonomy (Remember, Understand, Apply, Analyze, Evaluate, Create).
     - Include Multiple Choice Questions (MCQs), Short Answer Questions, and Long Answer Questions.
-    - Ensure marks add up to approximately {total_marks}.
+    - Ensure marks add up to approximately {total_marks}.{bloom_instruction}
     
     Return the paper as a JSON object with this structure:
     {{
@@ -26,13 +34,13 @@ async def generate_paper(course_code: str, total_marks: int, difficulty: str, to
       "difficulty": "{difficulty}",
       "sections": {{
         "mcq": [
-          {{ "question": "...", "options": ["A", "B", "C", "D"], "answer": "...", "marks": 1, "taxonomy": "Knowledge" }}
+          {{ "question": "...", "options": ["A", "B", "C", "D"], "answer": "...", "marks": 1, "taxonomy": "Remember" }}
         ],
         "short_answer": [
-          {{ "question": "...", "marks": 5, "taxonomy": "Understanding" }}
+          {{ "question": "...", "marks": 5, "taxonomy": "Understand" }}
         ],
         "long_answer": [
-          {{ "question": "...", "marks": 10, "taxonomy": "Application" }}
+          {{ "question": "...", "marks": 10, "taxonomy": "Apply" }}
         ]
       }}
     }}

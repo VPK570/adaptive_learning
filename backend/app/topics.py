@@ -4,7 +4,7 @@ from typing import Any
 
 from app.config import settings
 from app.db import get_db
-from app.openrouter import client
+from app.provider_router import router as client
 from app.validation import validate_course_code
 
 logger = logging.getLogger(__name__)

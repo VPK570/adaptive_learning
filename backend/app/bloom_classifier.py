@@ -2,7 +2,7 @@
 
 import json
 
-from app.openrouter import client
+from app.provider_router import router as client
 
 CLASSIFY_PROMPT = """Classify this student question into one Bloom's Taxonomy cognitive level.
 

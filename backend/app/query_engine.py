@@ -2,15 +2,18 @@
 
 Handles both text and image chunks in the context window.
 """
-from app.validation import sanitize_student_query
-from typing import AsyncGenerator, Dict, Any
+from typing import Any, AsyncGenerator, Dict
+
+from app.citation import extract_all_citations, parse_citation, remove_uncited_claims, validate_citations
 from app.config import settings
-from app.provider_router import router as client
-from app.citation import validate_citations, remove_uncited_claims, extract_all_citations, parse_citation
+from app.db import get_db
 from app.gatekeeper import gatekeeper
-from app.verifier import verifier
+from app.knowledge_state import BLOOM_LABELS, BLOOM_PROMPTS
+from app.provider_router import router as client
 from app.rag import RAGPipeline
-from app.knowledge_state import BLOOM_PROMPTS, BLOOM_LABELS
+from app.validation import sanitize_student_query
+from app.verifier import verifier
+
 
 def extract_cited_sources(response_text: str, chunks: list[dict]) -> list[dict]:
     """Match citations in the response back to retrieved chunks, deduped."""
@@ -95,7 +98,7 @@ def build_context_window(
 
     text_chunks = [c for c in chunks if c.get("content_type", "text") != "image"]
     image_chunks = [c for c in chunks if c.get("content_type") == "image" or c.get("has_image")]
-    
+
     available_citations = []
 
     for i, c in enumerate(text_chunks, 1):
@@ -169,25 +172,52 @@ class QueryEngine:
             self._rag_pipeline = RAGPipeline()
         return self._rag_pipeline
 
-    async def _get_gatekeeper_context(self, course_code: str) -> tuple[list[str], str]:
-        stats = await self.rag_pipeline.get_course_stats(course_code)
-        doc_titles = [d["name"] for d in stats.get("documents", [])]
-
+    async def _get_course_context(self, course_code: str) -> dict:
+        from app.courses import get_all_courses_data
         from app.topics import get_course_topics
+
+        courses = await get_all_courses_data()
+        course_info = next((c for c in courses if c["course_code"] == course_code), {})
+
+        db = await get_db()
+        rows = await db.query(
+            "SELECT source_title, text, page FROM text_chunk WHERE course_code = $code ORDER BY source_title, page LIMIT 50",
+            {"code": course_code},
+        ) or []
+        doc_previews = []
+        seen = set()
+        for r in rows:
+            title = r["source_title"]
+            if title not in seen:
+                seen.add(title)
+                doc_previews.append({
+                    "name": title,
+                    "preview": (r.get("text") or "")[:200],
+                })
+
+        topic_rows = await db.query(
+            "SELECT topic, count() as cnt FROM text_chunk WHERE course_code = $code AND topic != '' GROUP BY topic",
+            {"code": course_code},
+        ) or []
+        topic_coverage = {r["topic"]: r["cnt"] for r in topic_rows}
+
         topics = await get_course_topics(course_code)
         if topics:
             lines = []
             for t in topics:
                 subs = "; ".join(t.get("subtopics", []))
-                if subs:
-                    lines.append(f"{t['topic_name']} — {subs}")
-                else:
-                    lines.append(t['topic_name'])
+                lines.append(f"{t['topic_name']}" + (f" — {subs}" if subs else ""))
             curriculum_text = "\n".join(lines)
         else:
             curriculum_text = ""
 
-        return doc_titles, curriculum_text
+        return {
+            "course_name": course_info.get("course_name", course_code),
+            "course_description": course_info.get("description", ""),
+            "documents": doc_previews,
+            "curriculum_topics": curriculum_text,
+            "topic_coverage": topic_coverage,
+        }
 
     async def query_stream(
         self,
@@ -201,9 +231,9 @@ class QueryEngine:
         bloom_level: int | None = None,
         images: list[dict] | None = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        doc_titles, curriculum_text = await self._get_gatekeeper_context(course_code)
-        is_relevant, enriched_query, refusal = await gatekeeper.check_and_enrich(
-            query, course_code, doc_titles, curriculum_text
+        course_ctx = await self._get_course_context(course_code)
+        is_relevant, _, refusal = await gatekeeper.check_and_enrich(
+            query, course_code, course_ctx
         )
 
         if settings.GATEKEEPER_ENABLED and not is_relevant:
@@ -211,19 +241,38 @@ class QueryEngine:
             yield {"type": "metadata", "out_of_scope": True, "cited_sources": []}
             return
 
-        chunks = await self.rag_pipeline.retrieve(
-            query=enriched_query,
-            course_code=course_code,
-            top_k=top_k,
-        )
+        if settings.QUERY_ENHANCER_ENABLED:
+            from app.query_enhancer import generate_search_queries
+            search_queries = await generate_search_queries(
+                query, course_ctx,
+                num_queries=settings.QUERY_ENHANCER_NUM_QUERIES,
+            )
+        else:
+            search_queries = [query]
+
+        all_chunks = []
+        seen_ids = set()
+        for sq in search_queries:
+            sq_chunks = await self.rag_pipeline.retrieve(
+                query=sq,
+                course_code=course_code,
+                top_k=top_k,
+            )
+            for c in sq_chunks:
+                cid = c.get("chunk_id") or str(c.get("id", ""))
+                if cid and cid not in seen_ids:
+                    seen_ids.add(cid)
+                    all_chunks.append(c)
+
+        chunks = all_chunks[: top_k * 2]
 
         if not chunks:
             yield {"type": "content", "content": "I couldn't find specific information in the course materials, but I can try to help based on the curriculum."}
-            
+
         messages = build_tutor_prompt(
             query=query,
             course_code=course_code,
-            course_name=course_name,
+            course_name=course_ctx["course_name"],
             chunks=chunks,
             history=history or [],
             language=language,
@@ -239,7 +288,7 @@ class QueryEngine:
             yield {"type": "thinking", "content": strategy_text + "\n\n"}
 
         full_response = ""
-        async for chunk in client.stream(messages, temperature=0.3, max_tokens=1024, images=images):
+        async for chunk in client.stream(messages, temperature=0.3, images=images):
             if chunk["type"] == "content":
                 full_response += chunk["content"]
             yield chunk
@@ -248,7 +297,7 @@ class QueryEngine:
         if not is_valid:
             yield {"type": "content", "content": f"\n\n⚠️ *Note: This answer may contain information not explicitly in your notes. Reason: {reason}*"}
         actually_cited = extract_cited_sources(full_response, chunks)
-        
+
         yield {
             "type": "metadata",
             "cited_sources": actually_cited,
@@ -269,9 +318,9 @@ class QueryEngine:
         bloom_level: int | None = None,
         images: list[dict] | None = None,
     ) -> dict:
-        doc_titles, curriculum_text = await self._get_gatekeeper_context(course_code)
-        is_relevant, enriched_query, refusal = await gatekeeper.check_and_enrich(
-            query, course_code, doc_titles, curriculum_text
+        course_ctx = await self._get_course_context(course_code)
+        is_relevant, _, refusal = await gatekeeper.check_and_enrich(
+            query, course_code, course_ctx
         )
 
         if settings.GATEKEEPER_ENABLED and not is_relevant:
@@ -284,16 +333,35 @@ class QueryEngine:
                 "image_chunks": 0,
             }
 
-        chunks = await self.rag_pipeline.retrieve(
-            query=enriched_query,
-            course_code=course_code,
-            top_k=top_k,
-        )
+        if settings.QUERY_ENHANCER_ENABLED:
+            from app.query_enhancer import generate_search_queries
+            search_queries = await generate_search_queries(
+                query, course_ctx,
+                num_queries=settings.QUERY_ENHANCER_NUM_QUERIES,
+            )
+        else:
+            search_queries = [query]
+
+        all_chunks = []
+        seen_ids = set()
+        for sq in search_queries:
+            sq_chunks = await self.rag_pipeline.retrieve(
+                query=sq,
+                course_code=course_code,
+                top_k=top_k,
+            )
+            for c in sq_chunks:
+                cid = c.get("chunk_id") or str(c.get("id", ""))
+                if cid and cid not in seen_ids:
+                    seen_ids.add(cid)
+                    all_chunks.append(c)
+
+        chunks = all_chunks[: top_k * 2]
 
         messages = build_tutor_prompt(
             query=query,
             course_code=course_code,
-            course_name=course_name,
+            course_name=course_ctx["course_name"],
             chunks=chunks,
             history=history or [],
             language=language,
@@ -301,8 +369,8 @@ class QueryEngine:
             bloom_level=bloom_level,
         )
 
-        response_text = await client.chat(messages, temperature=0.3, max_tokens=1024, images=images)
-        
+        response_text = await client.chat(messages, temperature=0.3, images=images)
+
         is_valid, reason = await verifier.verify_answer(query, response_text, chunks, course_code)
         if not is_valid:
             response_text += f"\n\n[Verification Note: {reason}]"
