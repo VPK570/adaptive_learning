@@ -186,30 +186,36 @@ class ProviderRouter:
             parts.append({"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}})
         return parts
 
+    def _resolve_chat_provider(self, model: str | None) -> tuple:
+        if model and "/" in model:
+            return self._or_base, self._or_headers, self._or_keys, model
+        return self._gemini_base, self._gemini_headers, self._gemini_keys, model or self._gemini_model
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
         model: str | None = None,
         temperature: float = 0.3,
-        max_tokens: int = 1024,
+        max_tokens: int | None = None,
         disable_thinking: bool = True,
         images: list[dict] | None = None,
     ) -> str:
-        model = model or self._gemini_model
+        base_url, headers_fn, keyring, resolved = self._resolve_chat_provider(model)
         if images:
-            model = self._gemini_vision_model
+            resolved = self._gemini_vision_model
             messages = [dict(m) for m in messages]
             if messages and messages[-1].get("role") == "user":
                 messages[-1]["content"] = self._build_content(messages[-1]["content"], images)
         request_body: dict[str, Any] = {
-            "model": model,
+            "model": resolved,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens,
         }
+        if max_tokens is not None:
+            request_body["max_tokens"] = max_tokens
         data = await self._api_post(
-            self._gemini_base, "/v1/chat/completions",
-            self._gemini_headers, self._gemini_keys,
+            base_url, "/v1/chat/completions",
+            headers_fn, keyring,
             request_body, timeout=120, context="chat",
         )
         return data["choices"][0]["message"]["content"]
@@ -219,26 +225,27 @@ class ProviderRouter:
         messages: list[dict[str, Any]],
         model: str | None = None,
         temperature: float = 0.3,
-        max_tokens: int = 1024,
+        max_tokens: int | None = None,
         images: list[dict] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        model = model or self._gemini_model
+        base_url, headers_fn, keyring, resolved = self._resolve_chat_provider(model)
         if images:
-            model = self._gemini_vision_model
+            resolved = self._gemini_vision_model
             messages = [dict(m) for m in messages]
             if messages and messages[-1].get("role") == "user":
                 messages[-1]["content"] = self._build_content(messages[-1]["content"], images)
         request_body: dict[str, Any] = {
-            "model": model,
+            "model": resolved,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": True,
         }
+        if max_tokens is not None:
+            request_body["max_tokens"] = max_tokens
         buffer = ""
         async for raw in self._api_post_stream(
-            self._gemini_base, "/v1/chat/completions",
-            self._gemini_headers, self._gemini_keys,
+            base_url, "/v1/chat/completions",
+            headers_fn, keyring,
             request_body, timeout=120, context="stream",
         ):
             buffer += raw.decode()
@@ -266,21 +273,44 @@ class ProviderRouter:
         messages: list[dict[str, str]],
         response_schema: dict[str, Any],
         model: str | None = None,
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
-        model = model or self._gemini_model
+        base_url, headers_fn, keyring, resolved = self._resolve_chat_provider(model)
+        schema_json = json.dumps(response_schema, indent=2)
+        schema_instruction = f"\n\nReturn ONLY valid JSON matching this schema (no markdown, no explanation):\n{schema_json}"
+        if messages and messages[0].get("role") == "system":
+            messages = [
+                {"role": "system", "content": messages[0]["content"] + schema_instruction},
+                *messages[1:],
+            ]
+        else:
+            messages = [
+                {"role": "system", "content": f"Return valid JSON matching this schema:\n{schema_json}"},
+                *messages,
+            ]
+        body = {
+            "model": resolved,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.2,
+        }
+        if max_tokens is not None:
+            body["max_tokens"] = max_tokens
         data = await self._api_post(
-            self._gemini_base, "/v1/chat/completions",
-            self._gemini_headers, self._gemini_keys,
-            {
-                "model": model,
-                "messages": messages,
-                "response_format": {"type": "json_object", "schema": response_schema},
-                "temperature": 0.2,
-            },
+            base_url, "/v1/chat/completions",
+            headers_fn, keyring,
+            body,
             timeout=120,
             context="chat_with_schema",
         )
-        return json.loads(data["choices"][0]["message"]["content"])
+        content = data["choices"][0]["message"]["content"].strip()
+        if content.startswith("```"):
+            first_nl = content.find("\n")
+            content = content[first_nl + 1:] if first_nl != -1 else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+        return json.loads(content)
 
     # ── Embeddings → OpenRouter ──
 
@@ -357,17 +387,6 @@ class ProviderRouter:
             raise ValueError(f"No 'data' in response: {str(data)[:200]}")
         return [item["embedding"] for item in data["data"]]
 
-    async def embed_image(self, text: str) -> list[float]:
-        inputs = [{"content": [{"type": "text", "text": text}]}]
-        data = await self._api_post(
-            self._or_base, "/embeddings",
-            self._or_headers, self._or_keys,
-            {"model": self._embedding_model, "input": inputs},
-            timeout=30, context="embed_image",
-        )
-        if "data" not in data:
-            raise ValueError(f"Missing 'data' key: {str(data)[:200]}")
-        return data["data"][0]["embedding"]
 
     # ── Health ──
 

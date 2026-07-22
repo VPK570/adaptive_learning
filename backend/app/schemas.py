@@ -1,14 +1,15 @@
 from typing import List
+
 from pydantic import BaseModel, Field
 
 from app.validation import (
     MAX_COURSE_CODE_LENGTH,
-    MAX_SESSION_ID_LENGTH,
-    MAX_TOPIC_LENGTH,
-    MAX_QUESTION_LENGTH,
     MAX_COURSE_NAME_LENGTH,
     MAX_DESCRIPTION_LENGTH,
     MAX_LANGUAGE_LENGTH,
+    MAX_QUESTION_LENGTH,
+    MAX_SESSION_ID_LENGTH,
+    MAX_TOPIC_LENGTH,
 )
 
 
@@ -46,6 +47,7 @@ class PaperRequest(BaseModel):
     difficulty: str = Field("Medium", max_length=20)
     topics: List[str] = []
     top_k: int = Field(10, ge=1, le=50)
+    bloom_levels: list[int] | None = Field(None, min_length=1, max_length=6)
 
 
 class CourseCreate(BaseModel):
@@ -65,12 +67,19 @@ class FlashcardRequest(BaseModel):
     course_code: str = Field(..., max_length=MAX_COURSE_CODE_LENGTH)
     topic: str = Field(..., max_length=MAX_TOPIC_LENGTH)
     count: int = Field(5, ge=1, le=20)
+    bloom_levels: list[int] | None = Field(None, min_length=1, max_length=6)
 
 
 class SaveFlashcardRequest(BaseModel):
     course_code: str = Field(..., max_length=MAX_COURSE_CODE_LENGTH)
     topic: str = Field(..., max_length=MAX_TOPIC_LENGTH)
     cards: list[dict]
+
+
+class ChatFeedbackRequest(BaseModel):
+    question: str = Field(..., max_length=MAX_QUESTION_LENGTH)
+    course_code: str = Field(..., max_length=MAX_COURSE_CODE_LENGTH)
+    helpful: bool
 
 
 class QuizRequest(BaseModel):

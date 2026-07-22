@@ -21,13 +21,13 @@ class Settings:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "nvidia/llama-nemotron-embed-vl-1b-v2:free")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-001")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-3.6-flash")
     TOPIC_EXTRACTION_MODEL: str = os.getenv("TOPIC_EXTRACTION_MODEL", "google/gemma-4-26b-a4b-it:free")
     QUIZ_MODEL: str = os.getenv("QUIZ_MODEL", "google/gemma-4-26b-a4b-it:free")
 
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-001")
-    GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-2.5-flash-001")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-3.6-flash")
     GEMINI_BASE_URL: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
 
     @property
@@ -64,6 +64,9 @@ class Settings:
     CURRICULUM_THRESHOLD: float = float(os.getenv("CURRICULUM_THRESHOLD", "0.6"))
     RAG_MIN_SIMILARITY: float = float(os.getenv("RAG_MIN_SIMILARITY", "0.4"))
     GATEKEEPER_ENABLED: bool = os.getenv("GATEKEEPER_ENABLED", "false").lower() == "true"
+    BLOOM_VALIDATION_ENABLED: bool = os.getenv("BLOOM_VALIDATION_ENABLED", "false").lower() == "true"
+    QUERY_ENHANCER_ENABLED: bool = os.getenv("QUERY_ENHANCER_ENABLED", "true").lower() == "true"
+    QUERY_ENHANCER_NUM_QUERIES: int = int(os.getenv("QUERY_ENHANCER_NUM_QUERIES", "3"))
 
     DKT_ACTIVE: bool = os.getenv("DKT_ACTIVE", "false").lower() == "true"
     MASTERY_THRESHOLD: float = float(os.getenv("MASTERY_THRESHOLD", "0.7"))
