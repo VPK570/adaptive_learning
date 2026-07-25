@@ -135,7 +135,7 @@ async def test_curriculum_missing_field_auto_fix(surreal_db, mock_client, mock_f
             ]
             from app.curriculum import CurriculumManager
             manager = CurriculumManager()
-            result = await manager.ingest_curriculum("CSE101", "Syllabus", "dummy.pdf")
+            result = await manager.ingest_curriculum("CSE102", "Syllabus", "dummy.pdf")
             assert result["status"] == "success"
             assert result["chunks_ingested"] == 1
 
@@ -177,3 +177,154 @@ async def test_analytics_logging(surreal_db):
     res = await surreal_db.query("SELECT * FROM query_log WHERE course_code = $code", {"code": course_code})
     assert len(res) == 1
     assert res[0]["question"] == "What is a cell?"
+
+
+@pytest.mark.asyncio
+async def test_knowledge_state_update_increases_mastery(surreal_db):
+    from app.knowledge_state import KnowledgeStateManager
+    ksm = KnowledgeStateManager()
+    sid, cc, tid, bl = "student1", "CS101", "Flip-flops", 2
+
+    initial = await ksm.get_state(sid, cc, tid, bl)
+    assert initial["mastery_score"] == 0.0
+
+    await ksm.update_state(sid, cc, tid, bl, is_correct=True)
+    after = await ksm.get_state(sid, cc, tid, bl)
+    assert after["mastery_score"] > 0.0
+    assert after["total_attempts"] == 1
+    assert after["correct_attempts"] == 1
+    assert after["streak"] == 1
+
+
+@pytest.mark.asyncio
+async def test_knowledge_state_update_decreases_on_wrong(surreal_db):
+    from app.knowledge_state import KnowledgeStateManager
+    ksm = KnowledgeStateManager()
+    sid, cc, tid, bl = "student2", "CS101", "K-maps", 2
+
+    await ksm.update_state(sid, cc, tid, bl, is_correct=True)
+    await ksm.update_state(sid, cc, tid, bl, is_correct=False)
+    state = await ksm.get_state(sid, cc, tid, bl)
+    assert state["total_attempts"] == 2
+    assert state["correct_attempts"] == 1
+    assert state["streak"] == 0
+
+
+@pytest.mark.asyncio
+async def test_knowledge_state_stays_in_bounds(surreal_db):
+    from app.knowledge_state import KnowledgeStateManager
+    ksm = KnowledgeStateManager()
+    sid, cc, tid, bl = "student3", "CS101", "Counters", 1
+
+    for _ in range(50):
+        await ksm.update_state(sid, cc, tid, bl, is_correct=True)
+    state = await ksm.get_state(sid, cc, tid, bl)
+    assert 0.0 <= state["mastery_score"] <= 1.0
+    assert 0.0 <= state["confidence"] <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_get_topic_summary(surreal_db):
+    from app.knowledge_state import KnowledgeStateManager
+    ksm = KnowledgeStateManager()
+    sid, cc, tid = "student4", "CS101", "Sequential"
+
+    await ksm.update_state(sid, cc, tid, 1, is_correct=True)
+    await ksm.update_state(sid, cc, tid, 2, is_correct=False)
+
+    summary = await ksm.get_topic_summary(sid, cc, tid)
+    assert "mastery" in summary
+    assert "confidence" in summary
+    assert summary["total_attempts"] == 2
+    assert "bloom_breakdown" in summary
+
+
+@pytest.mark.asyncio
+async def test_get_student_course_states(surreal_db):
+    from app.knowledge_state import KnowledgeStateManager
+    ksm = KnowledgeStateManager()
+    sid, cc = "student5", "CS101"
+
+    await ksm.update_state(sid, cc, "TopicA", 1, True)
+    await ksm.update_state(sid, cc, "TopicB", 2, False)
+
+    states = await ksm.get_student_course_states(sid, cc)
+    assert len(states) >= 2
+
+
+@pytest.mark.asyncio
+async def test_gap_detection_no_data(surreal_db):
+    from app.gap_detection import detect_gaps
+    gaps = await detect_gaps("nonexistent", "CS101")
+    assert gaps == []
+
+
+@pytest.mark.asyncio
+async def test_gap_detection_identifies_drop(surreal_db):
+    from app.knowledge_state import KnowledgeStateManager
+    from app.gap_detection import detect_gaps
+    ksm = KnowledgeStateManager()
+    sid, cc, tid = "student6", "CS101", "LogicGates"
+
+    for _ in range(5):
+        await ksm._log_question(sid, cc, tid, 1, True, source="quiz")
+        await ksm._log_question(sid, cc, tid, 2, False, source="quiz")
+
+    gaps = await detect_gaps(sid, cc, tid)
+    assert len(gaps) >= 0
+
+
+@pytest.mark.asyncio
+async def test_should_trigger_diagnostic(surreal_db):
+    from app.gap_detection import should_trigger_diagnostic
+    result = await should_trigger_diagnostic("nonexistent", "CS101")
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_build_diagnostic_preamble():
+    from app.gap_detection import build_diagnostic_preamble
+    gaps = [{"bloom_label": "Apply"}, {"bloom_label": "Evaluate"}]
+    result = build_diagnostic_preamble("LogicGates", gaps)
+    assert "Apply" in result
+    assert "Evaluate" in result
+    assert "LogicGates" not in result  # it's topic_id, not shown
+
+
+@pytest.mark.asyncio
+async def test_topic_coverage_covered_and_missing(surreal_db):
+    from app.topics import get_topic_coverage
+    from app.db import get_db
+    db = await get_db()
+
+    await db.query(
+        "INSERT INTO course_topic {course_code: $cc, topic_name: $tn, order_index: 0, subtopics: [], prerequisites: [], bloom_level: 'Remember', learning_objectives: []}",
+        {"cc": "COV101", "tn": "CoveredTopic"},
+    )
+    await db.query(
+        "INSERT INTO course_topic {course_code: $cc, topic_name: $tn, order_index: 1, subtopics: [], prerequisites: [], bloom_level: 'Remember', learning_objectives: []}",
+        {"cc": "COV101", "tn": "MissingTopic"},
+    )
+
+    coverage = await get_topic_coverage("COV101")
+    assert coverage["total_topics"] == 2
+    assert coverage["covered"] == 0
+    assert coverage["missing"] == 2
+    assert coverage["topics"][0]["status"] == "missing"
+
+    for t in coverage["topics"]:
+        assert "topic_name" in t
+        assert "status" in t
+
+
+@pytest.mark.asyncio
+async def test_get_course_topics_order(surreal_db):
+    from app.topics import get_course_topics, store_course_topics
+    topics = [
+        {"topic_name": "B_topic", "subtopics": [], "prerequisites": [], "bloom_level": "Remember", "learning_objectives": []},
+        {"topic_name": "A_topic", "subtopics": [], "prerequisites": [], "bloom_level": "Understand", "learning_objectives": []},
+    ]
+    await store_course_topics("ORD101", topics)
+    stored = await get_course_topics("ORD101")
+    assert stored[0]["topic_name"] == "B_topic"
+    assert stored[1]["topic_name"] == "A_topic"

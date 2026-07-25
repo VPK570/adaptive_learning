@@ -216,5 +216,112 @@ async def test_count_and_list_courses():
     await rag.delete_course("BAECE102_TEST")
 
 
+class TestChunkerEdgeCases:
+    def test_extract_page_for_chunk_no_marker(self):
+        from app.chunker import extract_page_for_chunk
+        assert extract_page_for_chunk("Some text", "Some full text", 0) == 1
+
+    def test_extract_page_for_chunk_with_markers(self):
+        from app.chunker import extract_page_for_chunk
+        full_text = "[Page 1] Intro [Page 2] Middle [Page 3] End"
+        # chunk starting at "Middle" should get page 2
+        idx = full_text.index("Middle")
+        assert extract_page_for_chunk("Middle", full_text, idx) == 2
+
+    def test_extract_page_for_chunk_marker_inside(self):
+        from app.chunker import extract_page_for_chunk
+        full_text = "[Page 1] Some text [Page 2] More text"
+        idx = full_text.index("More text")
+        assert extract_page_for_chunk("More text", full_text, idx) == 2
+
+    def test_token_count_empty(self):
+        from app.chunker import token_count
+        assert token_count("") == 0
+
+    def test_token_count_nonempty(self):
+        from app.chunker import token_count
+        assert token_count("hello world") > 0
+
+    def test_clean_text_preserves_page_markers(self):
+        from app.chunker import clean_text
+        result = clean_text("Some text [Page 5] more text")
+        assert "[Page 5]" in result
+
+    def test_clean_text_removes_fake_page_numbers(self):
+        from app.chunker import clean_text
+        result = clean_text("Chapter 1. Page 42 Page 43. End.")
+        assert "Page 42" not in result
+
+    def test_clean_text_disallowed_chars(self):
+        from app.chunker import clean_text
+        result = clean_text("hello\x00world\x7ftest")
+        assert "\x00" not in result
+        assert "\x7f" not in result
+
+    def test_chunk_text_no_sentences(self):
+        from app.chunker import chunk_text
+        assert chunk_text("", 50, 10) == []
+        assert chunk_text("   ", 50, 10) == []
+
+
+from app.citation import parse_citation, format_citation, remove_uncited_claims as _remove_uncited_claims
+
+
+class TestCitationEdgeCases:
+
+    def test_parse_citation_standard(self):
+        title, page = parse_citation("[Source: Data Structures, Slide 8]")
+        assert title == "data structures"
+        assert page == "8"
+
+    def test_parse_citation_page_variant(self):
+        title, page = parse_citation("[Source: DLD Notes, Page 42]")
+        assert title == "dld notes"
+        assert page == "42"
+
+    def test_parse_citation_unit_variant(self):
+        title, page = parse_citation("[Source: Chemistry, Unit 3]")
+        assert title == "chemistry"
+        assert page == "3"
+
+    def test_parse_citation_fallback_no_label(self):
+        title, page = parse_citation("[Source: Notes, 7]")
+        assert title == "notes"
+        assert page == "7"
+
+    def test_parse_citation_no_match_returns_none(self):
+        assert parse_citation("No citation here") == (None, None)
+
+    def test_parse_citation_empty(self):
+        assert parse_citation("") == (None, None)
+
+    def test_format_citation_default(self):
+        result = format_citation("DLD Notes", 5)
+        assert "DLD Notes" in result
+        assert "5" in result
+        assert "Slide" in result
+
+    def test_format_citation_custom_type(self):
+        result = format_citation("DLD Notes", 5, cite_type="page")
+        assert "Page" in result
+
+    def test_remove_uncited_claims_basic(self):
+        text = "The moon is made entirely of cheese according to reports. [Source: Notes, Slide 1]"
+        result = _remove_uncited_claims(text)
+        assert "cheese" not in result
+        assert "Source: Notes" in result
+
+    def test_remove_uncited_claims_keeps_questions(self):
+        text = "What do you think? The moon is made of cheese."
+        result = _remove_uncited_claims(text)
+        assert "What do you think?" in result
+
+    def test_remove_uncited_claims_keeps_cited_sentences(self):
+        text = "Hash function maps keys [Source: DLD, Slide 8]. Random claim has no evidence whatsoever according to experts."
+        result = _remove_uncited_claims(text)
+        assert "Hash function" in result
+        assert "Random claim" not in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
