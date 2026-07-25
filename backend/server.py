@@ -125,7 +125,8 @@ async def request_id_middleware(request: Request, call_next):
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path.startswith(PUBLIC_PREFIXES) or request.method == "OPTIONS":
+    if path.startswith(PUBLIC_PREFIXES) or request.method == "OPTIONS" or \
+       (request.method == "GET" and path.startswith("/chat-images/")):
         return await call_next(request)
 
     auth = request.headers.get("Authorization")

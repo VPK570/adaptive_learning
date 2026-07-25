@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.auth import get_current_user
+from app.auth import get_current_user_from_request
 from app.bloom_classifier import classify_bloom_levels
 from app.config import settings
 from app.db import get_db
@@ -106,7 +106,7 @@ async def save_quiz(
 
 
 @router.get("/quiz/saved")
-async def list_saved_quizzes(course: str = Query(...), _=Depends(get_current_user)):
+async def list_saved_quizzes(course: str = Query(...), _=Depends(get_current_user_from_request)):
     course_code = validate_course_code(course)
     db = await get_db()
     rows = await db.query(
@@ -127,7 +127,7 @@ async def list_saved_quizzes(course: str = Query(...), _=Depends(get_current_use
 
 
 @router.delete("/quiz/saved/{quiz_id}")
-async def delete_saved_quiz(quiz_id: str, user: dict = Depends(get_current_user)):
+async def delete_saved_quiz(quiz_id: str, user: dict = Depends(get_current_user_from_request)):
     db = await get_db()
     result = await db.query(
         "DELETE quiz WHERE id = $id AND user_id = $uid RETURN BEFORE",

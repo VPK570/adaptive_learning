@@ -1,11 +1,16 @@
+import base64
 import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Form, UploadFile, File, HTTPException
+from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response
 from fastapi.responses import FileResponse
 
 from app.validation import MAX_IMAGE_SIZE, sanitize_id
+
+TRANSPARENT_PIXEL = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +59,7 @@ async def get_image(session_id: str, file_name: str):
     requested = (UPLOAD_DIR / safe_session / file_name).resolve()
     base = UPLOAD_DIR.resolve()
     if not str(requested).startswith(str(base)):
-        raise HTTPException(status_code=404, detail="Not found")
+        return Response(content=TRANSPARENT_PIXEL, media_type="image/png", status_code=200)
     if not requested.is_file():
-        raise HTTPException(status_code=404, detail="Not found")
+        return Response(content=TRANSPARENT_PIXEL, media_type="image/png", status_code=200)
     return FileResponse(str(requested))

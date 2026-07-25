@@ -6,7 +6,6 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.bloom_classifier import classify_bloom_level
 from app.deps import get_engine, get_knowledge_state, get_rag
 from app.knowledge_state import KnowledgeStateManager
 from app.query_engine import QueryEngine
@@ -75,11 +74,9 @@ async def chat_feedback(
     if not user_email:
         raise HTTPException(401, "Not authenticated")
     course_code = validate_course_code(body.course_code)
-    bloom = await classify_bloom_level(body.question)
-    if bloom is None:
-        return {"status": "skipped", "reason": "could not classify"}
-    await ks.update_state(user_email, course_code, "general", bloom, body.helpful)
-    return {"status": "updated", "bloom_level": bloom}
+    # ponytail: bloom-level classification skipped — add heuristic classifier here if needed
+    await ks.update_state(user_email, course_code, "general", 0, body.helpful)
+    return {"status": "updated"}
 
 
 @router.get("/stats")
@@ -133,6 +130,7 @@ async def query_stream(
     async def stream_generator():
         full_response = ""
         metadata = {}
+        chunk_count = 0
 
         async for chunk in engine.query_stream(
             query=question,
@@ -145,9 +143,15 @@ async def query_stream(
             top_k=body.top_k,
             images=image_data or None,
         ):
-            if chunk["type"] == "content":
+            chunk_count += 1
+            ctype = chunk["type"]
+            clen = len(chunk.get("content", "") or chunk.get("cited_sources", "") or json.dumps(chunk))
+            preview = json.dumps(chunk)[:500]
+            logger.info("SSE chunk #%d type=%s len=%d data=%s", chunk_count, ctype, clen, preview)
+
+            if ctype == "content":
                 full_response += chunk["content"]
-            elif chunk["type"] == "metadata":
+            elif ctype == "metadata":
                 metadata = chunk
 
             yield f"data: {json.dumps(chunk)}\n\n"

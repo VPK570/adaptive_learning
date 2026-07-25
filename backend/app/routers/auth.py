@@ -31,6 +31,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str
+    name: str | None = None
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -76,4 +77,4 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
         )
 
     token = create_access_token({"sub": user["email"], "role": user.get("role", "student")})
-    return TokenResponse(access_token=token, role=user.get("role", "student"))
+    return TokenResponse(access_token=token, role=user.get("role", "student"), name=user.get("name"))

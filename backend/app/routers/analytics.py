@@ -7,7 +7,7 @@ from app.analytics import (
     get_my_analytics,
     get_unanswered_questions,
 )
-from app.auth import get_current_user, require_role
+from app.auth import get_current_user_from_request, require_role
 from app.gap_detection import detect_gaps
 from app.validation import validate_course_code
 
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/analytics/me")
-async def my_analytics(course_code: str = "BAECE102", current_user: dict = Depends(get_current_user)):
+async def my_analytics(course_code: str = "BAECE102", current_user: dict = Depends(get_current_user_from_request)):
     course_code = validate_course_code(course_code)
     return await get_my_analytics(current_user["email"], course_code)
 
@@ -48,7 +48,7 @@ async def questions(course_code: str = "BAECE102", _=Depends(require_role("facul
 async def gaps(
     course_code: str = "BAECE102",
     topic_id: str | None = None,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_request),
 ):
     course_code = validate_course_code(course_code)
     result = await detect_gaps(current_user["email"], course_code, topic_id)

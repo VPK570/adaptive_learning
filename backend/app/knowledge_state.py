@@ -70,6 +70,7 @@ class KnowledgeStateManager:
         confidence = max(0.0, min(1.0, confidence))
 
         now = datetime.now(timezone.utc)
+        existing_defaults = existing if isinstance(existing, dict) else {}
         data = {
             "student_id": student_id,
             "course_code": course_code,
@@ -80,8 +81,11 @@ class KnowledgeStateManager:
             "total_attempts": total,
             "correct_attempts": correct,
             "streak": streak,
-            "last_reviewed_at": now.isoformat(),
-            "updated_at": now.isoformat(),
+            "difficulty": existing_defaults.get("difficulty", 0.5),
+            "stability": existing_defaults.get("stability"),
+            "last_reviewed_at": now,
+            "next_review_at": existing_defaults.get("next_review_at", now),
+            "updated_at": now,
         }
 
         res = await db.query(
@@ -104,6 +108,7 @@ class KnowledgeStateManager:
         )
 
     def _default_state(self, student_id: str, course_code: str, topic_id: str, bloom_level: int) -> dict:
+        now = datetime.now(timezone.utc)
         return {
             "student_id": student_id,
             "course_code": course_code,
@@ -116,6 +121,6 @@ class KnowledgeStateManager:
             "total_attempts": 0,
             "correct_attempts": 0,
             "streak": 0,
-            "last_reviewed_at": None,
-            "next_review_at": None,
+            "last_reviewed_at": now,
+            "next_review_at": now,
         }

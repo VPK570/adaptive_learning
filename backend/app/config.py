@@ -26,8 +26,8 @@ class Settings:
     QUIZ_MODEL: str = os.getenv("QUIZ_MODEL", "google/gemma-4-26b-a4b-it:free")
 
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-    GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-3.6-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemma-4-31b-it")
+    GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemma-4-31b-it")
     GEMINI_BASE_URL: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
 
     @property

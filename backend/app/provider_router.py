@@ -9,8 +9,10 @@ and the next key is tried automatically.
 """
 
 import asyncio
+import codecs
 import json
 import logging
+import re
 import time
 from typing import Any, AsyncGenerator
 
@@ -186,6 +188,30 @@ class ProviderRouter:
             parts.append({"type": "image_url", "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}})
         return parts
 
+    @staticmethod
+    def _extract_chat_content(data: dict) -> str:
+        choices = data.get("choices")
+        if not choices or not isinstance(choices, list) or len(choices) == 0:
+            logger.warning("chat: response has no choices array — keys=%s", list(data.keys()))
+            return ""
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            logger.warning("chat: choices[0] is not a dict — type=%s", type(choice).__name__)
+            return ""
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            logger.info("chat: choice has no message dict — finish_reason=%s",
+                        choice.get("finish_reason", "unknown"))
+            return ""
+        content = message.get("content")
+        if content is None:
+            logger.info("chat: message has no content key — finish_reason=%s",
+                        choice.get("finish_reason", "unknown"))
+            return ""
+        if not isinstance(content, str):
+            content = str(content)
+        return content
+
     def _resolve_chat_provider(self, model: str | None) -> tuple:
         if model and "/" in model:
             return self._or_base, self._or_headers, self._or_keys, model
@@ -218,7 +244,10 @@ class ProviderRouter:
             headers_fn, keyring,
             request_body, timeout=120, context="chat",
         )
-        return data["choices"][0]["message"]["content"]
+        content = self._extract_chat_content(data)
+        if not content:
+            return ""
+        return re.sub(r"<thought>.*?</thought>", "", content, flags=re.DOTALL).strip()
 
     async def stream(
         self,
@@ -243,12 +272,18 @@ class ProviderRouter:
         if max_tokens is not None:
             request_body["max_tokens"] = max_tokens
         buffer = ""
+        decoder = codecs.getincrementaldecoder("utf-8")()
         async for raw in self._api_post_stream(
             base_url, "/v1/chat/completions",
             headers_fn, keyring,
             request_body, timeout=120, context="stream",
         ):
-            buffer += raw.decode()
+            try:
+                decoded = decoder.decode(raw, final=False)
+            except UnicodeDecodeError:
+                decoded = raw.decode("utf-8", errors="replace")
+                decoder = codecs.getincrementaldecoder("utf-8")()
+            buffer += decoded
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
                 line = line.strip()
@@ -261,10 +296,15 @@ class ProviderRouter:
                     data = json.loads(data_str)
                     choice = data.get("choices", [{}])[0]
                     delta = choice.get("delta", {})
-                    if "thinking" in delta:
-                        yield {"type": "thinking", "content": delta["thinking"]}
-                    if "content" in delta and delta["content"]:
-                        yield {"type": "content", "content": delta["content"]}
+                    extra = delta.get("extra_content", {})
+                    if extra.get("google", {}).get("thought"):
+                        yield {"type": "thinking", "content": delta.get("content", "")}
+                    elif "content" in delta and delta["content"]:
+                        content = delta["content"]
+                        if "</thought>" in content:
+                            content = content.split("</thought>", 1)[-1]
+                        if content:
+                            yield {"type": "content", "content": content}
                 except json.JSONDecodeError:
                     continue
 
@@ -303,7 +343,9 @@ class ProviderRouter:
             timeout=120,
             context="chat_with_schema",
         )
-        content = data["choices"][0]["message"]["content"].strip()
+        content = self._extract_chat_content(data).strip()
+        if not content:
+            raise ValueError("chat_with_schema: LLM returned empty response")
         if content.startswith("```"):
             first_nl = content.find("\n")
             content = content[first_nl + 1:] if first_nl != -1 else content[3:]

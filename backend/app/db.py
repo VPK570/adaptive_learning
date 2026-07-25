@@ -144,7 +144,7 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS subtopics[*] ON TABLE course_topic TYPE string;
             DEFINE FIELD IF NOT EXISTS prerequisites ON TABLE course_topic TYPE array;
             DEFINE FIELD IF NOT EXISTS prerequisites[*] ON TABLE course_topic TYPE string;
-            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE course_topic TYPE string;
+            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE course_topic TYPE option<string>;
             DEFINE FIELD IF NOT EXISTS learning_objectives ON TABLE course_topic TYPE array;
             DEFINE FIELD IF NOT EXISTS learning_objectives[*] ON TABLE course_topic TYPE string;
             DEFINE FIELD IF NOT EXISTS order_index ON TABLE course_topic TYPE number;
@@ -241,13 +241,13 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE knowledge_state TYPE int;
             DEFINE FIELD IF NOT EXISTS mastery_score ON TABLE knowledge_state TYPE float;
             DEFINE FIELD IF NOT EXISTS confidence ON TABLE knowledge_state TYPE float;
-            DEFINE FIELD IF NOT EXISTS stability ON TABLE knowledge_state TYPE float;
-            DEFINE FIELD IF NOT EXISTS difficulty ON TABLE knowledge_state TYPE float;
+            DEFINE FIELD IF NOT EXISTS stability ON TABLE knowledge_state TYPE option<float>;
+            DEFINE FIELD IF NOT EXISTS difficulty ON TABLE knowledge_state TYPE option<float>;
             DEFINE FIELD IF NOT EXISTS total_attempts ON TABLE knowledge_state TYPE int;
             DEFINE FIELD IF NOT EXISTS correct_attempts ON TABLE knowledge_state TYPE int;
             DEFINE FIELD IF NOT EXISTS streak ON TABLE knowledge_state TYPE int;
-            DEFINE FIELD IF NOT EXISTS last_reviewed_at ON TABLE knowledge_state TYPE datetime;
-            DEFINE FIELD IF NOT EXISTS next_review_at ON TABLE knowledge_state TYPE datetime;
+            DEFINE FIELD IF NOT EXISTS last_reviewed_at ON TABLE knowledge_state TYPE option<datetime>;
+            DEFINE FIELD IF NOT EXISTS next_review_at ON TABLE knowledge_state TYPE option<datetime>;
             DEFINE FIELD IF NOT EXISTS updated_at ON TABLE knowledge_state TYPE datetime DEFAULT time::now();
             DEFINE INDEX IF NOT EXISTS ks_student_course ON TABLE knowledge_state FIELDS student_id, course_code, topic_id, bloom_level UNIQUE;
 
@@ -263,7 +263,7 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE question_log TYPE string;
             DEFINE FIELD IF NOT EXISTS topic_id ON TABLE question_log TYPE string;
             DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE question_log TYPE int;
-            DEFINE FIELD IF NOT EXISTS question_text ON TABLE question_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS question_text ON TABLE question_log TYPE option<string>;
             DEFINE FIELD IF NOT EXISTS is_correct ON TABLE question_log TYPE bool;
             DEFINE FIELD IF NOT EXISTS source ON TABLE question_log TYPE string;
             DEFINE FIELD IF NOT EXISTS timestamp ON TABLE question_log TYPE datetime DEFAULT time::now();

@@ -3,7 +3,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.auth import get_current_user
+from app.auth import get_current_user_from_request
 from app.config import settings
 from app.db import get_db
 from app.deps import get_rag
@@ -90,7 +90,7 @@ async def save_flashcards(
 
 
 @router.get("/flashcards/saved")
-async def list_saved_flashcards(course: str = Query(...), _=Depends(get_current_user)):
+async def list_saved_flashcards(course: str = Query(...), _=Depends(get_current_user_from_request)):
     course_code = validate_course_code(course)
     db = await get_db()
     rows = await db.query(
@@ -109,7 +109,7 @@ async def list_saved_flashcards(course: str = Query(...), _=Depends(get_current_
 
 
 @router.delete("/flashcards/saved/{set_id}")
-async def delete_saved_flashcards(set_id: str, user: dict = Depends(get_current_user)):
+async def delete_saved_flashcards(set_id: str, user: dict = Depends(get_current_user_from_request)):
     db = await get_db()
     result = await db.query(
         "DELETE flashcard_set WHERE id = $id AND user_id = $uid RETURN BEFORE",
