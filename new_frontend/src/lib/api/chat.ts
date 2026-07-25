@@ -2,8 +2,6 @@ import { api } from './client';
 import { useAuthStore } from '@/lib/store/authStore';
 import type { ChatMessage, QueryRequest, ChatFeedbackRequest } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-
 function parseUserMessage(msg: ChatMessage): { text: string; images: string[] } {
   if (msg.role !== 'user' || !msg.content) return { text: msg.text || msg.content || '', images: [] };
   try {
@@ -39,7 +37,7 @@ export const chatApi = {
     onError: (err: Error) => void,
   ): Promise<void> => {
     const token = useAuthStore.getState().token;
-    return fetch(`${API_BASE}/query-stream`, {
+    return fetch('/query-stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -56,17 +54,22 @@ export const chatApi = {
       const decoder = new TextDecoder();
       let buffer = '';
 
+      let eventCount = 0;
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        if (done) { console.log('[SSE] stream done, total events:', eventCount); break; }
+        const decoded = decoder.decode(value, { stream: true });
+        console.log('[SSE] chunk received, bytes:', value.length, 'decoded length:', decoded.length, 'preview:', decoded.slice(0, 100));
+        buffer += decoded;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         for (const line of lines) {
           const trimmed = line.replace(/\r$/, '');
           if (trimmed.startsWith('data: ')) {
+            eventCount++;
             try {
               const data = JSON.parse(trimmed.slice(6));
+              console.log('[SSE] event #' + eventCount + ' type=' + data.type + (data.content ? ' content_len=' + data.content.length : ''));
               if (data.type === 'thinking') {
                 onThinking(data.content);
               } else if (data.type === 'content') {
@@ -74,7 +77,7 @@ export const chatApi = {
               } else if (data.type === 'metadata') {
                 onMetadata(data);
               }
-            } catch { /* skip malformed chunks */ }
+            } catch { console.log('[SSE] malformed line:', trimmed.slice(0, 80)); }
           }
         }
       }

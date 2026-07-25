@@ -3,6 +3,7 @@ export interface LoginResponse {
   access_token: string;
   token_type: string;
   role: string;
+  name?: string;
 }
 
 export interface RegisterResponse {
@@ -146,6 +147,8 @@ export interface ChatMessage {
   paragraphs?: string[];
   bullets?: { label: string; text: string }[];
   sources?: { file?: string; page?: number; source_title?: string }[];
+  verified?: boolean;
+  verificationReason?: string;
 }
 
 // Structured Topics (from course_topic)

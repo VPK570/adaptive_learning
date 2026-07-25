@@ -29,18 +29,14 @@ export const useAuthStore = create<AuthState>()(
         const role = res.role;
         set({
           token,
-          user: { email, role, name: email.split('@')[0] },
+          user: { email, role, name: res.name || email.split('@')[0] },
           isAuthenticated: true,
         });
       },
 
       logout: () => {
         set({ token: null, user: null, isAuthenticated: false });
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
-          localStorage.removeItem('role');
-          window.location.href = '/';
-        }
+        window.location.href = '/';
       },
 
     }),
