@@ -36,7 +36,7 @@
   text-transform: uppercase;
   padding: 8px 12px;
   border-radius: var(--radius-DEFAULT);
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .actionBtn:hover {
@@ -54,7 +54,7 @@
   text-transform: uppercase;
   padding: 8px 16px;
   border-radius: var(--radius-DEFAULT);
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .primaryBtn:hover {
@@ -161,4 +161,13 @@
 
 .textBtn:hover {
   text-decoration: underline;
+}
+
+@media print {
+  .actionBar { display: none; }
+  .paperContainer { background: white; border: none; }
+  .document { box-shadow: none; min-height: auto; }
+  .paperTitle, .paperSubtitle { color: black; }
+  .qText { color: black; }
+  @page { margin: 20mm; }
 }

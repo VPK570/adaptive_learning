@@ -24,20 +24,28 @@ export default function DataTable({
             </tr>
           </thead>
           <tbody>
-            {data.map((row, i) => (
-              <tr key={row.id || i} className={styles.tr}>
-                {columns.map(col => (
-                  <td key={col.key} className={styles.td}>
-                    {col.render ? col.render(row[col.key], row) : row[col.key]}
-                  </td>
-                ))}
-                <td className={`${styles.td} ${styles.actionCell}`}>
-                  <button className={styles.actionBtn}>
-                    <Pencil size={16} />
-                  </button>
+            {data.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + 1} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-on-surface-variant)', font: 'var(--text-body-md)' }}>
+                  No data yet.
                 </td>
               </tr>
-            ))}
+            ) : (
+              data.map((row, i) => (
+                <tr key={row.id || i} className={styles.tr}>
+                  {columns.map(col => (
+                    <td key={col.key} className={styles.td}>
+                      {col.render ? col.render(row[col.key], row) : row[col.key]}
+                    </td>
+                  ))}
+                  <td className={`${styles.td} ${styles.actionCell}`}>
+                    <button className={styles.actionBtn}>
+                      <Pencil size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

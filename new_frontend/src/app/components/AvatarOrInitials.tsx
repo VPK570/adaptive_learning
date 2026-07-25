@@ -29,7 +29,7 @@ export default function AvatarOrInitials({ name, avatarUrl, initials, role }: { 
   return (
     <div className={styles.avatarWrapper}>
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className={styles.avatarImage} />
+        <img src={avatarUrl} alt={name} loading="lazy" className={styles.avatarImage} />
       ) : (
         <div className={styles.initialsCircle} style={{ backgroundColor: getBgColor(name) }}>
           {displayInitials}

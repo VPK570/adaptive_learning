@@ -62,7 +62,7 @@ export default function Sidebar({ navRole, activeNavKey, isOpen, onClose }) {
         <div className={styles.footerBlock}>
           <ul className={styles.navList}>
             <li className={styles.navItem}>
-              <button onClick={logout} className={styles.navLink} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', color: 'var(--color-error)', font: 'inherit', fontSize: 'inherit' }}>
+              <button onClick={() => { if (window.confirm('Are you sure you want to log out?')) logout(); }} className={styles.navLink} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', color: 'var(--color-error)', font: 'inherit', fontSize: 'inherit' }}>
                 <LogOut size={20} className={styles.navIcon} />
                 <span>Logout</span>
               </button>
