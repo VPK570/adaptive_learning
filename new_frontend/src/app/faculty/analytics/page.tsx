@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import AppShell from '@/app/components/AppShell';
 import { api } from '@/lib/api/client';
 import { coursesApi } from '@/lib/api/courses';
 import { BarChart3, AlertTriangle, Lightbulb, Sparkles, CheckCircle, Clock, Zap, BookOpen, Check, X } from 'lucide-react';
-import type { Analytics, Course } from '@/lib/api/types';
+import type { Analytics } from '@/lib/api/types';
 import styles from './Analytics.module.css';
 
 
@@ -27,41 +28,41 @@ function getDayLabel(dateStr: string): string {
 }
 
 export default function FacultyAnalyticsPage() {
-  const [courses, setCourses] = useState<Course[]>([]);
   const [courseCode, setCourseCode] = useState('');
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [questions, setQuestions] = useState<QuestionRow[]>([]);
-  const [coverage, setCoverage] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'7D' | '30D'>('7D');
 
-  useEffect(() => {
-    coursesApi.list().then(list => {
-      setCourses(list);
-      if (list.length > 0 && !courseCode) setCourseCode(list[0].course_code);
-    }).catch(() => {});
-  }, []);
+  const { data: courses = [] } = useQuery({
+    queryKey: ['courses'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
-    if (!courseCode) return;
-    setLoading(true);
-    setError(null);
-    Promise.all([
-      api.get('/analytics', { params: { course_code: courseCode } }),
-      api.get('/questions', { params: { course_code: courseCode } }),
-      api.get('/analytics/coverage', { params: { course_code: courseCode } }),
-    ])
-      .then(([aRes, qRes, cRes]) => {
-        setAnalytics(aRes.data);
-        setQuestions(qRes.data || []);
-        setCoverage(cRes.data || {});
-      })
-      .catch((err) => {
-        setError(err?.response?.data?.detail || err.message || 'Failed to load analytics');
-      })
-      .finally(() => setLoading(false));
-  }, [courseCode]);
+    if (courses.length > 0 && !courseCode) setCourseCode(courses[0].course_code);
+  }, [courses]);
+
+  const { data: analytics } = useQuery({
+    queryKey: ['analytics', courseCode],
+    queryFn: () => api.get('/analytics', { params: { course_code: courseCode } }).then(r => r.data),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
+
+  const { data: questions = [] } = useQuery({
+    queryKey: ['questions', courseCode],
+    queryFn: () => api.get('/questions', { params: { course_code: courseCode } }).then(r => r.data || []),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
+
+  const { data: coverage = {} } = useQuery({
+    queryKey: ['coverage', courseCode],
+    queryFn: () => api.get('/analytics/coverage', { params: { course_code: courseCode } }).then(r => r.data || {}),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
+
+  const loading = !analytics || !questions || !coverage;
 
   if (loading) {
     return (
@@ -69,14 +70,6 @@ export default function FacultyAnalyticsPage() {
         <div className={styles.loadingContainer}>
           <div className={styles.spinner} />
         </div>
-      </AppShell>
-    );
-  }
-
-  if (error) {
-    return (
-      <AppShell navRole="faculty" activeNavKey="analytics" topBarVariant="search">
-        <div className={styles.errorContainer}>{error}</div>
       </AppShell>
     );
   }
@@ -104,9 +97,9 @@ export default function FacultyAnalyticsPage() {
       <div className={styles.container}>
         <div className={styles.pageHeader}>
           <div>
-            <h2 style={{ font: 'var(--text-headline-lg)', color: 'var(--color-on-surface)', marginBottom: 'var(--space-2)' }}>
+            <h1 style={{ font: 'var(--text-headline-lg)', color: 'var(--color-on-surface)', marginBottom: 'var(--space-2)' }}>
               Faculty Analytics
-            </h2>
+            </h1>
             <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)' }}>
               Deep insights into student engagement and conceptual gaps.
             </p>

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
-
 import Badge from '@/app/components/Badge';
 import { coursesApi } from '@/lib/api/courses';
 import { analyticsApi } from '@/lib/api/analytics';
@@ -11,37 +11,35 @@ import type { Course, Analytics } from '@/lib/api/types';
 import styles from './Progress.module.css';
 
 export default function LearningProgress() {
-  const [courses, setCourses] = useState<Course[]>([]);
   const [weakTopics, setWeakTopics] = useState<string[]>([]);
   const [revisionItems, setRevisionItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { data: courses = [] } = useQuery({
+    queryKey: ['courses'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
+
+  const analyticsResults = useQueries({
+    queries: courses.map(c => ({
+      queryKey: ['analytics', c.course_code],
+      queryFn: ({ signal }) => analyticsApi.getMy(c.course_code, signal),
+      staleTime: 30_000,
+    })),
+  });
+
   useEffect(() => {
-    const controller = new AbortController();
-    coursesApi.list()
-      .then(async (list) => {
-        if (controller.signal.aborted) return;
-        setCourses(list);
-        const topics: string[] = [];
-        const revisions: string[] = [];
-        await Promise.all(list.map(c =>
-          analyticsApi.getMy(c.course_code)
-            .then((data: Analytics) => {
-              if (controller.signal.aborted) return;
-              if (data?.weak_topics) topics.push(...data.weak_topics);
-              if (data?.suggested_revision) revisions.push(...data.suggested_revision);
-            })
-            .catch(() => {})
-        ));
-        if (!controller.signal.aborted) {
-          setWeakTopics([...new Set(topics)]);
-          setRevisionItems([...new Set(revisions)]);
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, []);
+    const topics: string[] = [];
+    const revisions: string[] = [];
+    analyticsResults.forEach(result => {
+      if (result.data?.weak_topics) topics.push(...result.data.weak_topics);
+      if (result.data?.suggested_revision) revisions.push(...result.data.suggested_revision);
+    });
+    setWeakTopics([...new Set(topics)]);
+    setRevisionItems([...new Set(revisions)]);
+    setLoading(analyticsResults.length > 0 && analyticsResults.some(r => r.isLoading));
+  }, [analyticsResults]);
 
   const statTiles = [
     { icon: 'Award', value: '—', label: 'Overall Mastery', accent: 'primary' as const },
@@ -71,7 +69,9 @@ export default function LearningProgress() {
           <div className={styles.topicsColumn}>
             <h2 className={styles.sectionTitle}>Weak Topics</h2>
             {loading ? (
-              <p>Loading...</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {[1,2,3].map(i => <div key={i} style={{ height: 48, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container)', animation: 'pulse 1.5s infinite' }} />)}
+              </div>
             ) : (
               <div className={styles.topicsList}>
                 {weakTopics.length === 0 ? (
@@ -98,7 +98,9 @@ export default function LearningProgress() {
         <section className={styles.revisionSection}>
           <h2 className={styles.sectionTitle}>Recommended for Revision</h2>
           {loading ? (
-            <p>Loading...</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 'var(--space-3)' }}>
+              {[1,2,3].map(i => <div key={i} style={{ height: 80, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container)', animation: 'pulse 1.5s infinite' }} />)}
+            </div>
           ) : (
             <div className={styles.revisionGrid}>
               {revisionItems.length === 0 ? (

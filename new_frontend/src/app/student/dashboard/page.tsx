@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import AppShell from '@/app/components/AppShell';
 import RadialProgress from '@/app/components/RadialProgress';
 import StatTile from '@/app/components/StatTile';
 import CourseCard from '@/app/components/CourseCard';
+import { useQuery } from '@tanstack/react-query';
 import { coursesApi } from '@/lib/api/courses';
 import { useAuthStore } from '@/lib/store/authStore';
 import type { Course } from '@/lib/api/types';
@@ -12,18 +13,11 @@ import styles from './Dashboard.module.css';
 
 export default function StudentDashboard() {
   const user = useAuthStore(s => s.user);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const controller = new AbortController();
-    coursesApi.list()
-      .then(data => { if (!controller.signal.aborted) setCourses(data); })
-      .catch(e => { if (!controller.signal.aborted) setError(e.message); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, []);
+  const { data: courses = [], isLoading, error } = useQuery({
+    queryKey: ['courses'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
 
   const userName = user?.name?.split(' ')[0] || 'Student';
   const courseCards = courses.map(c => ({
@@ -61,10 +55,14 @@ export default function StudentDashboard() {
             <h2 className={styles.sectionTitle}>Continue Learning</h2>
           </div>
 
-          {loading ? (
-            <p>Loading courses...</p>
+          {isLoading ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
+              {[1,2,3].map(i => (
+                <div key={i} style={{ height: 160, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container)', opacity: 0.5 }} />
+              ))}
+            </div>
           ) : error ? (
-            <p className={styles.error}>{error}</p>
+            <p className={styles.error}>{error.message}</p>
           ) : (
             <div className={styles.courseGrid}>
               {courseCards.map(course => (

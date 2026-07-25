@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, use } from 'react';
+import React, { useState, useCallback, use } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Upload, FileText, Trash2 } from 'lucide-react';
 import AppShell from '@/app/components/AppShell';
@@ -8,7 +9,6 @@ import Dropzone from '@/app/components/Dropzone';
 import Badge from '@/app/components/Badge';
 import { ingestionApi } from '@/lib/api/ingestion';
 import { coursesApi } from '@/lib/api/courses';
-import type { CourseStats } from '@/lib/api/types';
 import { BookOpen, Layers } from 'lucide-react';
 import styles from './UploadMaterials.module.css';
 
@@ -24,28 +24,20 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
   const router = useRouter();
   const { code: courseCode } = use(params);
   const [uploadingFiles, setUploadingFiles] = useState<UploadFile[]>([]);
-  const [existingDocs, setExistingDocs] = useState<string[]>([]);
-  const [existingCurrDocs, setExistingCurrDocs] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'materials' | 'curriculum'>('materials');
-  const [structuredTopics, setStructuredTopics] = useState<any[]>([]);
-  const [topicsLoading, setTopicsLoading] = useState(false);
   const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'materials' | 'curriculum'>('materials');
 
-  const fetchDocs = useCallback((signal?: AbortSignal) => {
-    coursesApi.getStats(courseCode)
-      .then((data: CourseStats) => {
-        if (!signal?.aborted) {
-          setExistingDocs((data.documents || []).map(d => d.name));
-          setExistingCurrDocs((data.curriculum_docs || []).map(d => d.name));
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
-  }, [courseCode]);
+  const { data: course, isLoading } = useQuery({
+    queryKey: ['course', courseCode],
+    queryFn: () => coursesApi.get(courseCode),
+    staleTime: 30_000,
+  });
+
+  const { data: topics = [] } = useQuery({
+    queryKey: ['topics', courseCode],
+    queryFn: () => coursesApi.getStructuredTopics(courseCode),
+    staleTime: 30_000,
+  });
 
   const handleDeleteDoc = useCallback(async (name: string) => {
     if (!confirm(`Delete "${name}"? This will remove all related chunks and embeddings.`)) return;
@@ -56,21 +48,12 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
       } else {
         await ingestionApi.deleteCurriculum(courseCode, name);
       }
-      if (activeTab === 'curriculum') setStructuredTopics([]);
-      fetchDocs();
     } catch {
       alert('Failed to delete document');
     } finally {
       setDeletingFilename(null);
     }
-  }, [courseCode, activeTab, fetchDocs]);
-
-  useEffect(() => {
-    if (!courseCode) return;
-    const controller = new AbortController();
-    fetchDocs(controller.signal);
-    return () => controller.abort();
-  }, [courseCode, fetchDocs]);
+  }, [courseCode, activeTab]);
 
   const handleDrop = useCallback((newFiles: File[]) => {
     newFiles.forEach(file => {
@@ -98,7 +81,6 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
           ));
-          fetchDocs();
         })
         .catch(() => {
           setUploadingFiles(prev => prev.map(f =>
@@ -134,7 +116,6 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
           ));
-          fetchDocs();
         })
         .catch(() => {
           setUploadingFiles(prev => prev.map(f =>
@@ -143,20 +124,6 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
         });
     });
   }, [courseCode]);
-
-  const fetchTopics = useCallback(() => {
-    setTopicsLoading(true);
-    coursesApi.getStructuredTopics(courseCode)
-      .then(data => setStructuredTopics(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setTopicsLoading(false));
-  }, [courseCode]);
-
-  useEffect(() => {
-    if (activeTab === 'curriculum' && existingCurrDocs.length > 0) {
-      fetchTopics();
-    }
-  }, [activeTab, existingCurrDocs, fetchTopics]);
 
   const tabs = [
     { key: 'materials', label: 'Materials' },
@@ -172,8 +139,6 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
   const statusLabel: Record<string, string> = {
     uploading: 'Uploading', processing: 'Processing...', error: 'Failed',
   };
-
-  const docList = activeTab === 'materials' ? existingDocs : existingCurrDocs;
 
   return (
     <AppShell
@@ -228,62 +193,25 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
             <h3 className={styles.sectionTitle}>
               {activeTab === 'materials' ? 'Course Materials' : 'Curriculum Files'}
             </h3>
-            {loading ? (
+            {isLoading ? (
               <div className={styles.loadingContainer}>
                 <div className={styles.spinner} />
               </div>
-            ) : error ? (
-              <div className={styles.errorContainer}>{error}</div>
-            ) : docList.length === 0 ? (
-              <div className={styles.emptyDocs}>
-                <Upload size={40} style={{ color: 'var(--color-outline)', marginBottom: 16 }} />
-                <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center' }}>
-                  {activeTab === 'materials'
-                    ? 'No materials uploaded yet. Drop PDFs on the left to get started.'
-                    : 'No curriculum uploaded yet. Drop the syllabus PDF on the left to get started.'}
-                </p>
-              </div>
-            ) : (
-              <div className={`${styles.docList} ${styles.customScrollbar}`}>
-                {docList.map(name => (
-                  <div key={name} className={styles.docItem}>
-                    <div className={styles.docIcon}>
-                      <FileText size={24} style={{ color: 'var(--color-primary)' }} />
-                    </div>
-                    <div className={styles.docInfo}>
-                      <span className={styles.docName}>{name}</span>
-                    </div>
-                    <Badge variant="solid" color="primary">Ready</Badge>
-                    <button
-                      className={styles.deleteBtn}
-                      onClick={() => handleDeleteDoc(name)}
-                      disabled={deletingFilename === name}
-                      title={`Delete ${name}`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            ) : null}
 
-            {activeTab === 'curriculum' && existingCurrDocs.length > 0 && (
+            {activeTab === 'curriculum' && (
               <div style={{ marginTop: 'var(--space-6)' }}>
                 <h3 className={styles.sectionTitle}>
                   <BookOpen size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />
                   Extracted Topics
                 </h3>
-                {topicsLoading ? (
-                  <div className={styles.loadingContainer}>
-                    <div className={styles.spinner} />
-                  </div>
-                ) : structuredTopics.length === 0 ? (
+                {topics.length === 0 ? (
                   <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: 'var(--space-4)' }}>
                     No topics extracted yet. Topics are extracted during curriculum processing.
                   </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                    {structuredTopics.map((topic, i) => (
+                    {topics.map((topic, i) => (
                       <div key={i} className={styles.topicCard}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                           <span className={styles.topicName}>{topic.topic_name}</span>

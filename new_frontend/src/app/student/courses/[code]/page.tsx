@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Send, BookOpen, Sparkles, Copy, ThumbsUp, Zap, ChevronDown, ImageIcon, X } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import dynamic from 'next/dynamic';
+const ReactMarkdown = dynamic(() => import('react-markdown'), { ssr: false });
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 
@@ -14,9 +15,8 @@ import ProgressBar from '@/app/components/ProgressBar';
 import { coursesApi } from '@/lib/api/courses';
 import { chatApi } from '@/lib/api/chat';
 import type { Course, ChatMessage } from '@/lib/api/types';
+import { useToast } from '@/app/components/ToastContext';
 import styles from './CourseDetail.module.css';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 function cite(text: string) {
   return text.replace(
@@ -25,7 +25,63 @@ function cite(text: string) {
   );
 }
 
+const ChatMessage = React.memo(({ msg, feedbackLoading, onFeedback }: {
+  msg: ChatMessage;
+  feedbackLoading: Record<number, boolean>;
+  onFeedback: (msgId: number, helpful: boolean) => void;
+}) => {
+  return (
+    <div className={`${styles.messageBubble} ${styles[msg.role]}`}>
+      <div className={styles.assistantContent}>
+        {msg.images && msg.images.length > 0 && (
+          <div className={styles.msgImages}>
+            {msg.images.map(imgId => (
+              <img key={imgId} src={`/chat-images/${imgId}`} alt="Uploaded" className={styles.msgImage} />
+            ))}
+          </div>
+        )}
+        {msg.role === 'assistant' && msg.thinkingText && (
+          <details className={styles.thinkingBlock}>
+            <summary className={styles.thinkingSummary}>
+              <ChevronDown size={14} className={styles.thinkingChevron} />
+              Show reasoning
+            </summary>
+            <div className={styles.thinkingContent}>{msg.thinkingText}</div>
+          </details>
+        )}
+        <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+          {cite(msg.text)}
+        </ReactMarkdown>
+        {msg.sources && msg.sources.length > 0 && (
+          <div className={styles.sourcesBlock}>
+            <span className={styles.sourcesLabel}>Sources:</span>
+            {msg.sources.map((s, i) => (
+              <span key={i} className={styles.sourceChip}>
+                <FileText size={12} /> {s.file || s.source_title}, p.{s.page}
+              </span>
+            ))}
+          </div>
+        )}
+        {msg.verified === false && (
+          <div className={styles.unverifiedBanner}>
+            ⚠️ This answer may not be based on your course materials. {msg.verificationReason}
+          </div>
+        )}
+        {msg.role === 'assistant' && msg.text && (
+          <div className={styles.msgActions}>
+            <button className={styles.msgActionBtn}><Copy size={14} /> Copy</button>
+            <button className={styles.msgActionBtn} onClick={() => onFeedback(msg.id, true)} disabled={feedbackLoading[msg.id]}>
+              <ThumbsUp size={14} /> {feedbackLoading[msg.id] ? '...' : 'Helpful'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function CourseDetailPage({ params }: { params: Promise<{ code: string }> }) {
+  const { showToast } = useToast();
   const router = useRouter();
   const { code } = use(params);
   const [course, setCourse] = useState<Course | null>(null);
@@ -93,14 +149,14 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
   const handleSend = useCallback(() => {
     if ((!inputValue.trim() && imageIds.length === 0) || streaming || !course) return;
     const userText = inputValue;
-    const userMsg: ChatMessage = { id: Date.now(), role: 'user', text: userText, images: [...imageIds] };
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: userText, images: [...imageIds] };
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
     setImageIds([]);
     setImagePreviews([]);
     setStreaming(true);
 
-    const assistantId = Date.now() + 1;
+    const assistantId = crypto.randomUUID();
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '', thinkingText: '' }]);
 
     let fullText = '';
@@ -108,26 +164,34 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
     chatApi.queryStream(
       { question: userText, course_code: code, session_id: sessionId, bloom_level: bloomLevel, image_ids: imageIds.length > 0 ? imageIds : undefined },
       (content) => {
+        console.log('[PAGE] onContent chunk len=' + content.length + ' total=' + (fullText.length + content.length));
         fullText += content;
         setMessages(prev => prev.map(m =>
           m.id === assistantId ? { ...m, text: (m.text || '') + content } : m
         ));
       },
       (content) => {
+        console.log('[PAGE] onThinking chunk len=' + content.length);
         setMessages(prev => prev.map(m =>
           m.id === assistantId ? { ...m, thinkingText: (m.thinkingText || '') + content } : m
         ));
       },
       (meta) => {
+        console.log('[PAGE] onMetadata', JSON.stringify(meta));
         setMessages(prev => prev.map(m =>
           m.id === assistantId
-            ? { ...m, sources: (meta.cited_sources || meta.sources || []).map(s => ({ file: s.source_title || s.file, page: s.page })) }
+            ? {
+                ...m,
+                sources: (meta.cited_sources || meta.sources || []).map(s => ({ file: s.source_title || s.file, page: s.page })),
+                verified: meta.verified,
+                verificationReason: meta.verification_reason,
+              }
             : m
         ));
         setStreaming(false);
         chatApi.saveMessage(code, sessionId, 'assistant', fullText).catch(() => {});
       },
-      () => { setStreaming(false); }
+      () => { console.log('[PAGE] onError/onDone'); setStreaming(false); }
     );
 
     chatApi.saveMessage(code, sessionId, 'user', userText).catch(() => {});
@@ -139,6 +203,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
     setFeedbackLoading(prev => ({ ...prev, [msgId]: true }));
     try {
       await chatApi.feedback({ question: lastUser.text || '', course_code: code, helpful });
+      showToast('Feedback recorded', 'success');
     } catch { /* silently fail */ }
     setFeedbackLoading(prev => ({ ...prev, [msgId]: false }));
   }, [messages, course, code, feedbackLoading]);
@@ -208,52 +273,16 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
 
           <div className={styles.chatBody}>
             {loading ? (
-              <p className={styles.msgText}>Loading chat...</p>
+              <div style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div style={{ height: 48, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container)', animation: 'pulse 1.5s infinite', width: '60%' }} />
+                <div style={{ height: 48, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container)', animation: 'pulse 1.5s infinite', width: '40%' }} />
+                <div style={{ height: 48, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container)', animation: 'pulse 1.5s infinite', width: '50%' }} />
+              </div>
             ) : messages.length === 0 ? (
               <p className={styles.msgText}>Ask a question about your course materials.</p>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`${styles.messageBubble} ${styles[msg.role]}`}>
-                  <div className={styles.assistantContent}>
-                    {msg.images && msg.images.length > 0 && (
-                      <div className={styles.msgImages}>
-                        {msg.images.map(imgId => (
-                          <img key={imgId} src={`${API_BASE}/chat-images/${imgId}`} alt="Uploaded" className={styles.msgImage} />
-                        ))}
-                      </div>
-                    )}
-                    {msg.role === 'assistant' && msg.thinkingText && (
-                      <details className={styles.thinkingBlock}>
-                        <summary className={styles.thinkingSummary}>
-                          <ChevronDown size={14} className={styles.thinkingChevron} />
-                          Show reasoning
-                        </summary>
-                        <div className={styles.thinkingContent}>{msg.thinkingText}</div>
-                      </details>
-                    )}
-                    <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                      {cite(msg.text)}
-                    </ReactMarkdown>
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className={styles.sourcesBlock}>
-                        <span className={styles.sourcesLabel}>Sources:</span>
-                        {msg.sources.map((s, i) => (
-                          <span key={i} className={styles.sourceChip}>
-                            <FileText size={12} /> {s.file || s.source_title}, p.{s.page}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {msg.role === 'assistant' && msg.text && (
-                      <div className={styles.msgActions}>
-                        <button className={styles.msgActionBtn}><Copy size={14} /> Copy</button>
-                        <button className={styles.msgActionBtn} onClick={() => handleFeedback(msg.id, true)} disabled={feedbackLoading[msg.id]}>
-                          <ThumbsUp size={14} /> {feedbackLoading[msg.id] ? '...' : 'Helpful'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <ChatMessage key={msg.id} msg={msg} feedbackLoading={feedbackLoading} onFeedback={handleFeedback} />
               ))
             )}
             <div ref={chatEndRef} />

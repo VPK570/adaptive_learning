@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AppShell from '@/app/components/AppShell';
 import { flashcardsApi } from '@/lib/api/flashcards';
 import { coursesApi } from '@/lib/api/courses';
 import { Sparkles } from 'lucide-react';
 import type { Flashcard, SavedFlashcardSet, Course, StructuredTopic } from '@/lib/api/types';
+import { useToast } from '@/app/components/ToastContext';
 
 const BLOOM_MAP: Record<string, string> = {
   Remember: '1', Understand: '2', Apply: '3', Analyze: '4', Evaluate: '5', Create: '6',
@@ -13,18 +15,17 @@ const BLOOM_MAP: Record<string, string> = {
 import styles from './Flashcards.module.css';
 
 export default function FlashcardsPage() {
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [phase, setPhase] = useState<'config' | 'studying' | 'results'>('config');
-  const [courses, setCourses] = useState<Course[]>([]);
   const [courseCode, setCourseCode] = useState('');
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState(15);
   const [bloomLevel, setBloomLevel] = useState('1');
-  const [topics, setTopics] = useState<StructuredTopic[]>([]);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [knownCount, setKnownCount] = useState(0);
-  const [savedSets, setSavedSets] = useState<SavedFlashcardSet[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -37,26 +38,37 @@ export default function FlashcardsPage() {
   phaseRef.current = phase;
   isFlippedRef.current = isFlipped;
 
-  useEffect(() => {
-    flashcardsApi.listSaved('').then(setSavedSets).catch(() => {});
-    coursesApi.list().then(list => {
-      setCourses(list);
-      if (list.length > 0) setCourseCode(list[0].course_code);
-    }).catch(() => {});
-  }, []);
+  const { data: savedSets = [] } = useQuery({
+    queryKey: ['flashcards-saved'],
+    queryFn: () => flashcardsApi.listSaved(''),
+    staleTime: 30_000,
+  });
+
+  const { data: courses = [] } = useQuery({
+    queryKey: ['courses'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
-    if (!courseCode) return;
-    coursesApi.getStructuredTopics(courseCode).then(data => {
-      const list = Array.isArray(data) ? data : [];
-      setTopics(list);
-      if (list.length > 0) {
-        setTopic(list[0].topic_name);
-        const bl = BLOOM_MAP[list[0].bloom_level];
-        if (bl) setBloomLevel(bl);
-      }
-    }).catch(() => {});
-  }, [courseCode]);
+    if (courses.length > 0 && !courseCode) setCourseCode(courses[0].course_code);
+  }, [courses]);
+
+  const { data: topics = [] } = useQuery({
+    queryKey: ['topics', courseCode],
+    queryFn: () => coursesApi.getStructuredTopics(courseCode),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    const list = Array.isArray(topics) ? topics : [];
+    if (list.length > 0) {
+      setTopic(list[0].topic_name);
+      const bl = BLOOM_MAP[list[0].bloom_level];
+      if (bl) setBloomLevel(bl);
+    }
+  }, [topics]);
 
   const handleTopicChange = (value: string) => {
     setTopic(value);
@@ -141,8 +153,10 @@ export default function FlashcardsPage() {
         topic: topic || 'general',
         cards,
       });
-      flashcardsApi.listSaved('').then(setSavedSets).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['flashcards-saved'] });
+      showToast('Saved to collections!', 'success');
     } catch {
+      showToast('Failed to save set', 'error');
       setError('Failed to save set');
     }
   };
@@ -170,7 +184,7 @@ export default function FlashcardsPage() {
         {phase === 'config' && (
           <>
             <div className={styles.header}>
-              <h2>Flashcard Generator</h2>
+              <h1>Flashcard Generator</h1>
               <p>Leverage AI to synthesize complex course materials into active-recall study sets. Select your parameters below to begin.</p>
             </div>
             <div className={styles.configGrid}>

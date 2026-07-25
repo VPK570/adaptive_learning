@@ -35,9 +35,9 @@
 }
 
 .glassCard {
-  background: rgba(17, 17, 23, 0.6);
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 60%, transparent);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(225, 224, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--color-primary-fixed-dim) 8%, transparent);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
 }
@@ -152,9 +152,9 @@
 }
 
 .questionCard {
-  background: rgba(17, 17, 23, 0.6);
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 60%, transparent);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(225, 224, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--color-primary-fixed-dim) 8%, transparent);
   border-radius: 24px;
   padding: var(--space-8);
   position: relative;

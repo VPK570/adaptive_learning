@@ -41,7 +41,7 @@
   width: 100%;
   appearance: none;
   background: var(--color-surface-container);
-  border: 1px solid rgba(70, 69, 84, 0.1);
+  border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   font: var(--text-body-md);
@@ -51,7 +51,7 @@
 }
 
 .courseSelect select:focus {
-  border-color: rgba(192, 193, 255, 0.5);
+  border-color: var(--color-primary);
 }
 
 .courseSelect::after {
@@ -83,14 +83,14 @@
 
 .statTile {
   background: var(--color-surface-container-low);
-  border: 1px solid rgba(70, 69, 84, 0.1);
+  border: 1px solid var(--color-outline-variant);
   padding: var(--space-6);
   border-radius: var(--radius-md);
   transition: border-color 0.2s;
 }
 
 .statTile:hover {
-  border-color: rgba(192, 193, 255, 0.2);
+  border-color: var(--color-primary);
 }
 
 .statIcon {

@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AppShell from '@/app/components/AppShell';
 import { quizApi } from '@/lib/api/quiz';
 import { coursesApi } from '@/lib/api/courses';
 import { analyticsApi } from '@/lib/api/analytics';
 import { Library, CheckCircle, SlidersHorizontal, BarChart3, Timer, Check, Lightbulb, ArrowRight, Trophy, X } from 'lucide-react';
 import type { QuizQuestion, SavedQuiz, Course, StructuredTopic } from '@/lib/api/types';
+import { useToast } from '@/app/components/ToastContext';
 import styles from './Quiz.module.css';
 
 const BLOOM_LEVELS = [
@@ -23,13 +25,12 @@ const BLOOM_MAP: Record<string, number> = {
 };
 
 export default function QuizPage() {
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [courseCode, setCourseCode] = useState('');
   const [topic, setTopic] = useState('');
   const [count, setCount] = useState(10);
   const [bloomLevels, setBloomLevels] = useState<number[]>([1, 3]);
-  const [topics, setTopics] = useState<StructuredTopic[]>([]);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -41,48 +42,55 @@ export default function QuizPage() {
   const [saving, setSaving] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchSaved = useCallback(async () => {
-    try {
-      const data = await quizApi.listSaved(courseCode);
-      setSavedQuizzes(data);
-    } catch {
-      // silently fail
+  const { data: courses = [] } = useQuery({
+    queryKey: ['courses'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (courses.length > 0 && !courseCode) {
+      setCourseCode(courses[0].course_code);
+      setTopic(courses[0].course_name);
     }
-  }, [courseCode]);
+  }, [courses]);
+
+  const { data: analyticsData } = useQuery({
+    queryKey: ['analytics', courseCode],
+    queryFn: ({ signal }) => analyticsApi.getMy(courseCode, signal),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
-    if (!courseCode) return;
-    analyticsApi.getMy(courseCode).then(data => {
-      if (data.bloom_mastery && Object.keys(data.bloom_mastery).length > 0) {
-        const weak = BLOOM_LEVELS
-          .filter(bl => (data.bloom_mastery![bl.level] ?? 0) < 0.7)
-          .map(bl => bl.level);
-        if (weak.length > 0) setBloomLevels(weak);
-      }
-    }).catch(() => {});
-  }, [courseCode]);
+    if (analyticsData?.bloom_mastery && Object.keys(analyticsData.bloom_mastery).length > 0) {
+      const weak = BLOOM_LEVELS
+        .filter(bl => (analyticsData.bloom_mastery![bl.level] ?? 0) < 0.7)
+        .map(bl => bl.level);
+      if (weak.length > 0) setBloomLevels(weak);
+    }
+  }, [analyticsData]);
+
+  const { data: topics = [] } = useQuery({
+    queryKey: ['topics', courseCode],
+    queryFn: () => coursesApi.getStructuredTopics(courseCode),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
-    fetchSaved();
-    coursesApi.list().then(list => {
-      setCourses(list);
-      if (list.length > 0) {
-        setCourseCode(list[0].course_code);
-        setTopic(list[0].course_name);
-      }
-    }).catch(() => {});
-  }, [fetchSaved]);
+    const list = Array.isArray(topics) ? topics : [];
+    if (list.length > 0) {
+      setTopic(list[0].topic_name);
+    }
+  }, [topics]);
 
-  useEffect(() => {
-    if (!courseCode) return;
-    coursesApi.getStructuredTopics(courseCode).then(data => {
-      const list = Array.isArray(data) ? data : [];
-      setTopics(list);
-      if (list.length > 0) {
-        setTopic(list[0].topic_name);
-      }
-    }).catch(() => {});
-  }, [courseCode]);
+  const { data: savedQuizzes = [] } = useQuery({
+    queryKey: ['quiz-saved', courseCode],
+    queryFn: () => quizApi.listSaved(courseCode),
+    enabled: !!courseCode,
+    staleTime: 30_000,
+  });
 
   const handleTopicChange = (value: string) => {
     setTopic(value);
@@ -145,9 +153,10 @@ export default function QuizPage() {
     try {
       const correctCount = questions.filter((q) => q.is_correct).length;
       await quizApi.save({ course_code: courseCode, topic, questions, score: correctCount, total: questions.length, bloom_levels: bloomLevels });
-      await fetchSaved();
+      queryClient.invalidateQueries({ queryKey: ['quiz-saved', courseCode] });
+      showToast('Results saved!', 'success');
     } catch {
-      // silently fail
+      showToast('Failed to save results', 'error');
     } finally {
       setSaving(false);
     }
@@ -183,7 +192,7 @@ export default function QuizPage() {
         {questions.length === 0 && !showResults && (
           <>
             <section className={styles.headerSection}>
-              <h2>AI Assessment Lab</h2>
+              <h1>AI Assessment Lab</h1>
               <p>Select a course to generate a specialized quiz tailored to your learning progress.</p>
             </section>
 

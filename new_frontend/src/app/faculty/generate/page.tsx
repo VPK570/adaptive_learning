@@ -7,7 +7,8 @@ import AppShell from '@/app/components/AppShell';
 import FormField from '@/app/components/FormField';
 import CheckboxCard from '@/app/components/CheckboxCard';
 import RemovableSection from '@/app/components/RemovableSection';
-import PaperPreview from '@/app/components/PaperPreview';
+import dynamic from 'next/dynamic';
+const PaperPreview = dynamic(() => import('@/app/components/PaperPreview'), { ssr: false });
 import BloomPill from '@/app/components/BloomPill';
 import { paperApi } from '@/lib/api/paper';
 import type { GeneratedPaper, PaperQuestion } from '@/lib/api/types';
@@ -24,6 +25,11 @@ const defaultSections = [
   { id: 'sec-3', title: 'Section C', questions: 3, marksPerQ: 10 },
 ];
 
+const breadcrumbs = [
+  { label: 'Dashboard', href: '/faculty/dashboard' },
+  { label: 'Generate Paper' },
+];
+
 export default function QuestionPaperGenerator() {
   const router = useRouter();
   const [step, setStep] = useState('configure');
@@ -38,11 +44,6 @@ export default function QuestionPaperGenerator() {
   const [paper, setPaper] = useState<GeneratedPaper | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
-
-  const breadcrumbs = [
-    { label: 'Dashboard', href: '/faculty/dashboard' },
-    { label: 'Generate Paper' }
-  ];
 
   const toggleBloom = (level: string) => {
     setBloomLevels(prev => ({ ...prev, [level]: !prev[level] }));

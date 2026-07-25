@@ -4,12 +4,14 @@ import React, { useState } from 'react';
 import Modal from '@/app/components/Modal';
 import FormField from '@/app/components/FormField';
 import { coursesApi } from '@/lib/api/courses';
+import { useToast } from '@/app/components/ToastContext';
 
 export default function AddCourseModal({ isOpen, onClose, onSuccess }) {
+  const { showToast } = useToast();
   const [courseCode, setCourseCode] = useState('');
   const [courseName, setCourseName] = useState('');
   const [description, setDescription] = useState('');
-  const [icon, setIcon] = useState('📚');
+  const [icon, setIcon] = useState('book');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,15 +28,17 @@ export default function AddCourseModal({ isOpen, onClose, onSuccess }) {
         course_code: courseCode.trim().toUpperCase(),
         course_name: courseName.trim(),
         description: description.trim(),
-        icon: icon || '📚',
+        icon: icon || 'book',
       });
       setCourseCode('');
       setCourseName('');
       setDescription('');
-      setIcon('📚');
+      setIcon('book');
+      showToast('Course created successfully!', 'success');
       onSuccess();
       onClose();
     } catch (e) {
+      showToast(e.response?.data?.detail || 'Failed to create course', 'error');
       setError(e.response?.data?.detail || e.message || 'Failed to create course');
     } finally {
       setSaving(false);
@@ -93,7 +97,7 @@ export default function AddCourseModal({ isOpen, onClose, onSuccess }) {
           onBlur={e => { e.target.style.borderColor = 'var(--color-outline-variant)'; e.target.style.background = 'var(--color-surface-container)'; }}
         />
       </div>
-      <FormField label="Icon (optional)" value={icon} onChange={e => setIcon(e.target.value)} placeholder="📚" min={undefined} max={undefined} />
+      <FormField label="Icon (optional)" value={icon} onChange={e => setIcon(e.target.value)} placeholder="book" min={undefined} max={undefined} />
     </Modal>
   );
 }

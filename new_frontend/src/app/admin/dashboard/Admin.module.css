@@ -163,3 +163,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 640px) {
+  .statsRow {
+    grid-template-columns: 1fr !important;
+  }
+}

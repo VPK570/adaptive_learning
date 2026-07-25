@@ -52,7 +52,7 @@ export default function RegisterPage() {
                 </svg>
               </span>
               <input
-                type="email" id="email" name="email" className="form-input"
+                type="email" id="email" name="email" autoComplete="email" className="form-input"
                 placeholder="name@university.edu" required
                 value={email} onChange={e => setEmail(e.target.value)}
               />
@@ -69,7 +69,7 @@ export default function RegisterPage() {
                 </svg>
               </span>
               <input
-                type="password" id="password" name="password" className="form-input"
+                type="password" id="password" name="password" autoComplete="new-password" className="form-input"
                 placeholder="••••••••" required
                 value={password} onChange={e => setPassword(e.target.value)}
               />

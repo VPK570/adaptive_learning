@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
 import CourseCard from '@/app/components/CourseCard';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { coursesApi } from '@/lib/api/courses';
 import type { Course } from '@/lib/api/types';
 import AddCourseModal from './AddCourseModal';
@@ -12,24 +13,14 @@ import styles from './Faculty.module.css';
 
 export default function FacultyDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const queryClient = useQueryClient();
 
-  const fetchCourses = useCallback(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    coursesApi.list()
-      .then(data => { if (!controller.signal.aborted) setCourses(data); })
-      .catch(() => {})
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return controller;
-  }, []);
-
-  useEffect(() => {
-    const controller = fetchCourses();
-    return () => controller.abort();
-  }, [fetchCourses]);
+  const { data: courses = [], isLoading } = useQuery({
+    queryKey: ['courses', 'faculty'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
 
   const tabs = [
     { key: 'dashboard', label: 'Dashboard' },
@@ -76,7 +67,7 @@ export default function FacultyDashboard() {
 
         <section className={styles.coursesSection}>
           <h2 className={styles.sectionTitle}>Active Courses</h2>
-          {loading ? (
+          {isLoading ? (
             <p>Loading courses...</p>
           ) : (
             <div className={styles.courseGrid}>
@@ -91,7 +82,7 @@ export default function FacultyDashboard() {
       <AddCourseModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSuccess={() => fetchCourses()}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['courses', 'faculty'] })}
       />
     </AppShell>
   );
