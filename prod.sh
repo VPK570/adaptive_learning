@@ -127,7 +127,8 @@ NEXT_PUBLIC_API_URL='' npm run build
 # 8. Start frontend server
 # ──────────────────────────────────────────────
 info "Starting frontend server..."
-NEXT_PUBLIC_API_URL='' npm start &
+cd "$FRONTEND_DIR"
+NEXT_PUBLIC_API_URL='' node .next/standalone/server.js &
 FRONTEND_PID=$!
 
 if wait_for_port 3000 "Frontend" 30; then
@@ -141,7 +142,7 @@ fi
 # 9. Start Caddy
 # ──────────────────────────────────────────────
 info "Starting Caddy reverse proxy..."
-caddy run --config "$CADDYFILE" &
+caddy run --config "$CADDYFILE" --adapter caddyfile &
 CADDY_PID=$!
 
 if wait_for_port 8080 "Caddy" 10; then

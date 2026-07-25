@@ -36,7 +36,7 @@ services:
       - SURREAL_DB=learning_platform
       - GEMINI_API_KEYS=${GEMINI_API_KEYS}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.6-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemma-4-31b-it}
       - OPENROUTER_API_KEYS=${OPENROUTER_API_KEYS}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nvidia/llama-nemotron-embed-vl-1b-v2:free}
@@ -78,11 +78,13 @@ services:
     build:
       context: ./new_frontend
       dockerfile: Dockerfile
+      args:
+        - API_PROXY_TARGET=http://backend:8001
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - API_PROXY_TARGET=http://backend:8001
     depends_on:
       - backend
 
