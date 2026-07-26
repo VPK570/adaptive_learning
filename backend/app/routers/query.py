@@ -3,9 +3,10 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.auth import get_current_user_from_request
 from app.deps import get_engine, get_knowledge_state, get_rag
 from app.knowledge_state import KnowledgeStateManager
 from app.query_engine import QueryEngine
@@ -67,12 +68,10 @@ async def health():
 @router.post("/chat/feedback")
 async def chat_feedback(
     body: ChatFeedbackRequest,
-    request: Request,
     ks: KnowledgeStateManager = Depends(get_knowledge_state),
+    user: dict = Depends(get_current_user_from_request),
 ):
-    user_email = request.state.user.get("email", "")
-    if not user_email:
-        raise HTTPException(401, "Not authenticated")
+    user_email = user.get("email", "")
     course_code = validate_course_code(body.course_code)
     # ponytail: bloom-level classification skipped — add heuristic classifier here if needed
     await ks.update_state(user_email, course_code, "general", 0, body.helpful)
@@ -113,13 +112,13 @@ async def get_chunks(
 @router.post("/query-stream")
 async def query_stream(
     body: QueryRequest,
-    request: Request,
     engine: QueryEngine = Depends(get_engine),
+    user: dict = Depends(get_current_user_from_request),
 ):
     course_code = validate_course_code(body.course_code)
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
-    user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
+    user_email = user.get("email", "")
 
     from app.chat_history import add_message, get_course_history
 
@@ -176,13 +175,13 @@ async def query_stream(
 @router.post("/query", response_model=QueryResponse)
 async def query(
     body: QueryRequest,
-    request: Request,
     engine: QueryEngine = Depends(get_engine),
+    user: dict = Depends(get_current_user_from_request),
 ):
     course_code = validate_course_code(body.course_code)
     session_id = sanitize_id(body.session_id)
     question = sanitize_text(body.question, MAX_QUESTION_LENGTH)
-    user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
+    user_email = user.get("email", "")
 
     from app.chat_history import add_message, get_course_history
 

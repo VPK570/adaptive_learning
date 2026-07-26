@@ -1,7 +1,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user_from_request
 from app.config import settings
@@ -74,11 +74,11 @@ MATERIALS:
 @router.post("/flashcards/save")
 async def save_flashcards(
     body: SaveFlashcardRequest,
-    request: Request,
+    user: dict = Depends(get_current_user_from_request),
 ):
     course_code = validate_course_code(body.course_code)
     topic = sanitize_text(body.topic, MAX_TOPIC_LENGTH)
-    user_email = request.state.user.get("email", "") if hasattr(request.state, "user") else ""
+    user_email = user.get("email", "")
 
     from app.db import get_db
     db = await get_db()

@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Any
 
@@ -132,7 +131,7 @@ async def get_topic_coverage(course_code: str) -> dict[str, Any]:
     topics = await get_course_topics(course_code)
     db = await get_db()
     res = await db.query(
-        "SELECT topic, count() as cnt FROM text_chunk WHERE course_code = $code AND topic != '' GROUP BY topic",
+        "SELECT topic, count() as cnt FROM text_chunk WHERE course_code = $code GROUP BY topic",
         {"code": course_code},
     )
     covered = {r["topic"]: r["cnt"] for r in res} if res else {}

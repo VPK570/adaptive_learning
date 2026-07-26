@@ -1,7 +1,10 @@
 """Pytest configuration — ChromaDB and SurrealDB."""
 
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Load .env first (may set production values), then override to test namespace
 # Must happen BEFORE any app. imports since Settings class reads os.getenv() at class body level

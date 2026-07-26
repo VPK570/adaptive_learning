@@ -121,7 +121,12 @@ class ProviderRouter:
                 )
                 if response.is_success:
                     keyring.report_success(key)
-                    return response.json()
+                    try:
+                        return response.json()
+                    except json.JSONDecodeError:
+                        body_preview = response.text[:500]
+                        logger.error("[%s] 200 OK but non-JSON response: %s", context, body_preview)
+                        raise
                 body = response.text[:200]
                 if response.status_code == 429:
                     keyring.report_429(key)
@@ -240,7 +245,7 @@ class ProviderRouter:
         if max_tokens is not None:
             request_body["max_tokens"] = max_tokens
         data = await self._api_post(
-            base_url, "/v1/chat/completions",
+            base_url, "/chat/completions",
             headers_fn, keyring,
             request_body, timeout=120, context="chat",
         )
@@ -274,7 +279,7 @@ class ProviderRouter:
         buffer = ""
         decoder = codecs.getincrementaldecoder("utf-8")()
         async for raw in self._api_post_stream(
-            base_url, "/v1/chat/completions",
+            base_url, "/chat/completions",
             headers_fn, keyring,
             request_body, timeout=120, context="stream",
         ):
@@ -336,16 +341,27 @@ class ProviderRouter:
         }
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
-        data = await self._api_post(
-            base_url, "/v1/chat/completions",
-            headers_fn, keyring,
-            body,
-            timeout=120,
-            context="chat_with_schema",
-        )
+        max_attempts = 2
+        for attempt in range(max_attempts):
+            try:
+                data = await self._api_post(
+                    base_url, "/chat/completions",
+                    headers_fn, keyring,
+                    body,
+                    timeout=120,
+                    context="chat_with_schema",
+                )
+                break
+            except ValueError as e:
+                if attempt < max_attempts - 1:
+                    logger.warning("[chat_with_schema] attempt %d failed — retrying: %s", attempt + 1, e)
+                    await asyncio.sleep(1)
+                    continue
+                raise
         content = self._extract_chat_content(data).strip()
         if not content:
             raise ValueError("chat_with_schema: LLM returned empty response")
+        content = re.sub(r"<thought>.*?</thought>", "", content, flags=re.DOTALL).strip()
         if content.startswith("```"):
             first_nl = content.find("\n")
             content = content[first_nl + 1:] if first_nl != -1 else content[3:]

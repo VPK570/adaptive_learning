@@ -1,8 +1,9 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth import get_current_user_from_request
 from app.db import SurrealDBManager
 
 router = APIRouter()
@@ -23,8 +24,7 @@ def _serialize(row):
 
 
 @router.get("/users/me")
-async def get_current_user(request: Request):
-    user = request.state.user
+async def get_current_user(user: dict = Depends(get_current_user_from_request)):
     db = await SurrealDBManager.get_db()
     result = await db.query("SELECT * FROM user WHERE email = $email", {"email": user["email"]})
     rows = result if result else []
@@ -34,8 +34,7 @@ async def get_current_user(request: Request):
 
 
 @router.put("/users/me")
-async def update_current_user(body: UpdateUserRequest, request: Request):
-    user = request.state.user
+async def update_current_user(body: UpdateUserRequest, user: dict = Depends(get_current_user_from_request)):
     email = user["email"]
     db = await SurrealDBManager.get_db()
     result = await db.query("SELECT * FROM user WHERE email = $email", {"email": email})

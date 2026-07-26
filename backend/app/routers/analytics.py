@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 
 from app.analytics import (
     get_all_questions,
@@ -9,6 +10,7 @@ from app.analytics import (
 )
 from app.auth import get_current_user_from_request, require_role
 from app.gap_detection import detect_gaps
+from app.topics import get_topic_coverage
 from app.validation import validate_course_code
 
 router = APIRouter()
@@ -42,6 +44,27 @@ async def coverage(course_code: str = "BAECE102", _=Depends(require_role("facult
 async def questions(course_code: str = "BAECE102", _=Depends(require_role("faculty", "admin"))):
     course_code = validate_course_code(course_code)
     return await get_all_questions(course_code)
+
+
+@router.get("/analytics/report/{course_code}")
+async def analytics_report(course_code: str, _=Depends(require_role("faculty", "admin"))):
+    course_code = validate_course_code(course_code)
+    from datetime import datetime
+    analytics_data = await get_analytics(course_code)
+    coverage_data = await get_coverage(course_code)
+    topic_coverage = await get_topic_coverage(course_code)
+    unanswered = await get_unanswered_questions(course_code)
+    return JSONResponse(
+        content={
+            "generated_at": datetime.now().isoformat(),
+            "course_code": course_code,
+            "analytics": analytics_data,
+            "document_coverage": coverage_data,
+            "topic_coverage": topic_coverage,
+            "unanswered_questions": unanswered,
+        },
+        headers={"Content-Disposition": f'attachment; filename="analytics_{course_code}_{datetime.now().strftime("%Y%m%d")}.json"'},
+    )
 
 
 @router.get("/analytics/gaps")

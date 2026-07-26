@@ -1,10 +1,12 @@
 import logging
 from typing import Any
+
+from surrealdb.errors import InternalError
+
 from app.db import get_db
 from app.provider_router import router as client
 from app.rag import calculate_file_hash
 from app.validation import validate_course_code
-from surrealdb.errors import InternalError
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ class CurriculumManager:
         course_code = validate_course_code(course_code)
         db = await get_db()
         content_hash = calculate_file_hash(filepath)
-        
+
         # Check if already ingested
         existing = await db.query(
             "SELECT id FROM document WHERE course_code = $course AND content_hash = $hash",
@@ -30,10 +32,10 @@ class CurriculumManager:
 
         from app.pdf_extractor import extract_all_pages
         pages_content = await extract_all_pages(filepath)
-        
+
         chunks_to_insert = []
         documents = []
-        
+
         for page in pages_content:
             if page.text.strip():
                 documents.append(page.text)
@@ -45,12 +47,12 @@ class CurriculumManager:
                     "topic": topic,
                     "content_type": "curriculum_text"
                 })
-        
+
         if chunks_to_insert:
             embeddings = await client.embed_text_batch(documents)
             for i, chunk in enumerate(chunks_to_insert):
                 chunk["embedding"] = embeddings[i]
-            
+
             try:
                 await db.query("INSERT INTO curriculum_chunk $chunks", {"chunks": chunks_to_insert})
             except InternalError as e:
@@ -68,7 +70,7 @@ class CurriculumManager:
                         raise
                 else:
                     raise
-            
+
             # Record ingestion in document table
             from datetime import datetime
             await db.query(
@@ -80,16 +82,28 @@ class CurriculumManager:
                     "time": datetime.now().isoformat()
                 }
             )
-            
+
             # Extract structured topics from syllabus text
             try:
                 from app.topics import extract_topics_from_syllabus, store_course_topics
                 full_syllabus = "\n\n".join(documents)
                 topics = await extract_topics_from_syllabus(full_syllabus)
                 await store_course_topics(course_code, topics)
+                # Back-fill topic tags on existing untagged chunks that mention the topic name
+                for topic_item in topics:
+                    name = topic_item.get("topic_name", "")
+                    if name:
+                        await db.query(
+                            "UPDATE text_chunk SET topic = $name WHERE course_code = $code AND topic = '' AND text CONTAINS $name",
+                            {"code": course_code, "name": name},
+                        )
+                        await db.query(
+                            "UPDATE image_chunk SET topic = $name WHERE course_code = $code AND topic = '' AND text CONTAINS $name",
+                            {"code": course_code, "name": name},
+                        )
             except Exception as e:
                 logger.warning("Topic extraction failed (non-fatal): %s", e)
-        
+
         return {"status": "success", "chunks_ingested": len(chunks_to_insert)}
 
     async def list_curriculum(self, course_code: str) -> list[str]:
@@ -104,7 +118,7 @@ class CurriculumManager:
         course_code = validate_course_code(course_code)
         db = await get_db()
         res = await db.query("SELECT text FROM curriculum_chunk WHERE course_code = $code", {"code": course_code})
-        
+
         topics = set()
         if res:
             for row in res:
@@ -119,7 +133,7 @@ class CurriculumManager:
         course_code = validate_course_code(course_code)
         query_embedding = await client.embed_text(query)
         db = await get_db()
-        
+
         # 1. Search Curriculum
         curr_query = f"""
             SELECT vector::similarity::cosine(embedding, $query_vec) AS similarity 
@@ -128,12 +142,12 @@ class CurriculumManager:
             AND embedding <|{settings.CURRICULUM_K}, {settings.CURRICULUM_EF}|> $query_vec
         """
         res = await db.query(curr_query, {"query_vec": query_embedding, "course": course_code})
-        
+
         if res:
             similarities = [r["similarity"] for r in res]
             if max(similarities) > settings.CURRICULUM_THRESHOLD:
                 return True
-        
+
         # 2. Fallback: Search Course Notes
         notes_query = f"""
             SELECT vector::similarity::cosine(embedding, $query_vec) AS similarity 
@@ -146,5 +160,5 @@ class CurriculumManager:
             similarities = [r["similarity"] for r in res_notes]
             if max(similarities) > settings.CURRICULUM_THRESHOLD:
                 return True
-                
+
         return False
