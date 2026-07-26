@@ -28,19 +28,9 @@ services:
       - 1.1.1.1
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    env_file: ./backend/.env
     environment:
       - SURREAL_URL=ws://surrealdb:8000/rpc
-      - SURREAL_USER=root
-      - SURREAL_PASS=root
-      - SURREAL_NS=adaptive_learning
-      - SURREAL_DB=learning_platform
-      - GEMINI_API_KEYS=${GEMINI_API_KEYS}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemma-4-31b-it}
-      - OPENROUTER_API_KEYS=${OPENROUTER_API_KEYS}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nvidia/llama-nemotron-embed-vl-1b-v2:free}
-      - JWT_SECRET=${JWT_SECRET}
     restart: unless-stopped
     depends_on:
       - surrealdb
@@ -56,14 +46,9 @@ services:
       - 1.1.1.1
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    env_file: ./backend/.env
     environment:
       - SURREAL_URL=ws://surrealdb:8000/rpc
-      - SURREAL_USER=root
-      - SURREAL_PASS=root
-      - SURREAL_NS=adaptive_learning
-      - SURREAL_DB=learning_platform
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - JWT_SECRET=${JWT_SECRET}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: unless-stopped
