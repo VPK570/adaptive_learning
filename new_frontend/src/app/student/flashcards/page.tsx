@@ -39,8 +39,9 @@ export default function FlashcardsPage() {
   isFlippedRef.current = isFlipped;
 
   const { data: savedSets = [] } = useQuery({
-    queryKey: ['flashcards-saved'],
-    queryFn: () => flashcardsApi.listSaved(''),
+    queryKey: ['flashcards-saved', courseCode],
+    queryFn: () => flashcardsApi.listSaved(courseCode),
+    enabled: !!courseCode,
     staleTime: 30_000,
   });
 

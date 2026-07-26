@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, use } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Upload, FileText, Trash2 } from 'lucide-react';
 import AppShell from '@/app/components/AppShell';
@@ -26,6 +26,9 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
   const [uploadingFiles, setUploadingFiles] = useState<UploadFile[]>([]);
   const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'materials' | 'curriculum'>('materials');
+  const [selectedTopic, setSelectedTopic] = useState('');
+
+  const queryClient = useQueryClient();
 
   const { data: course, isLoading } = useQuery({
     queryKey: ['course', courseCode],
@@ -39,6 +42,12 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
     staleTime: 30_000,
   });
 
+  const { data: stats } = useQuery({
+    queryKey: ['stats', courseCode],
+    queryFn: () => coursesApi.getStats(courseCode),
+    staleTime: 30_000,
+  });
+
   const handleDeleteDoc = useCallback(async (name: string) => {
     if (!confirm(`Delete "${name}"? This will remove all related chunks and embeddings.`)) return;
     setDeletingFilename(name);
@@ -48,12 +57,14 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
       } else {
         await ingestionApi.deleteCurriculum(courseCode, name);
       }
+      queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
+      queryClient.invalidateQueries({ queryKey: ['topics', courseCode] });
     } catch {
       alert('Failed to delete document');
     } finally {
       setDeletingFilename(null);
     }
-  }, [courseCode, activeTab]);
+  }, [courseCode, activeTab, queryClient]);
 
   const handleDrop = useCallback((newFiles: File[]) => {
     newFiles.forEach(file => {
@@ -70,7 +81,7 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
       ingestionApi.ingestPdf(
         file,
         courseCode,
-        '',
+        selectedTopic,
         pct => {
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, progress: pct } : f
@@ -81,6 +92,7 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
           ));
+          queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
         })
         .catch(() => {
           setUploadingFiles(prev => prev.map(f =>
@@ -88,7 +100,7 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           ));
         });
     });
-  }, [courseCode]);
+  }, [courseCode, queryClient, selectedTopic]);
 
   const handleCurriculumDrop = useCallback((newFiles: File[]) => {
     newFiles.forEach(file => {
@@ -105,7 +117,7 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
       ingestionApi.uploadCurriculum(
         file,
         courseCode,
-        '',
+        selectedTopic,
         pct => {
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, progress: pct } : f
@@ -116,6 +128,8 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
           ));
+          queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
+          queryClient.invalidateQueries({ queryKey: ['topics', courseCode] });
         })
         .catch(() => {
           setUploadingFiles(prev => prev.map(f =>
@@ -123,7 +137,7 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           ));
         });
     });
-  }, [courseCode]);
+  }, [courseCode, queryClient, selectedTopic]);
 
   const tabs = [
     { key: 'materials', label: 'Materials' },
@@ -163,6 +177,34 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
 
         <div className={styles.layout}>
           <div className={styles.leftPanel}>
+            {topics.length > 0 ? (
+              <div style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <label style={{ font: 'var(--text-label-md)', color: 'var(--color-on-surface-variant)', whiteSpace: 'nowrap' }}>
+                  Topic:
+                </label>
+                <select
+                  value={selectedTopic}
+                  onChange={e => setSelectedTopic(e.target.value)}
+                  style={{
+                    flex: 1, padding: 'var(--space-2) var(--space-3)',
+                    font: 'var(--text-body-md)',
+                    background: 'var(--color-surface-container-high)',
+                    color: 'var(--color-on-surface)',
+                    border: '1px solid var(--color-outline-variant)',
+                    borderRadius: 8,
+                  }}
+                >
+                  <option value="">-- Auto-detect / General --</option>
+                  {topics.map(t => (
+                    <option key={t.topic_name} value={t.topic_name}>{t.topic_name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3)', background: 'var(--color-surface-container-high)', borderRadius: 8, font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)', textAlign: 'center' }}>
+                Upload a curriculum PDF to enable topic tagging for materials.
+              </div>
+            )}
             <Dropzone onDrop={activeTab === 'materials' ? handleDrop : handleCurriculumDrop} />
 
             {uploadingFiles.length > 0 && (
@@ -199,45 +241,98 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
               </div>
             ) : null}
 
-            {activeTab === 'curriculum' && (
-              <div style={{ marginTop: 'var(--space-6)' }}>
-                <h3 className={styles.sectionTitle}>
-                  <BookOpen size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-                  Extracted Topics
-                </h3>
-                {topics.length === 0 ? (
-                  <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: 'var(--space-4)' }}>
-                    No topics extracted yet. Topics are extracted during curriculum processing.
-                  </p>
+            {activeTab === 'materials' && (
+              <div className={styles.docList}>
+                {stats?.documents?.length > 0 ? (
+                  stats.documents.map((doc, i) => (
+                    <div key={i} className={styles.docItem}>
+                      <div className={styles.docIcon}>
+                        <FileText size={20} />
+                      </div>
+                      <div className={styles.docInfo}>
+                        <span className={styles.docName}>{doc.name}</span>
+                      </div>
+                      <button
+                        className={styles.deleteBtn}
+                        onClick={() => handleDeleteDoc(doc.name)}
+                        disabled={deletingFilename === doc.name}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                    {topics.map((topic, i) => (
-                      <div key={i} className={styles.topicCard}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <span className={styles.topicName}>{topic.topic_name}</span>
-                          <Badge variant="solid" color="secondary">{topic.bloom_level}</Badge>
+                  <div className={styles.emptyDocs}>
+                    <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center' }}>
+                      No materials uploaded yet.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'curriculum' && (
+              <>
+                {stats?.curriculum_docs?.length > 0 && (
+                  <div className={styles.docList} style={{ marginBottom: 'var(--space-6)' }}>
+                    {stats.curriculum_docs.map((doc, i) => (
+                      <div key={i} className={styles.docItem}>
+                        <div className={styles.docIcon}>
+                          <FileText size={20} />
                         </div>
-                        {topic.subtopics?.length > 0 && (
-                          <div style={{ font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)', marginBottom: 4 }}>
-                            <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                            {topic.subtopics.join(', ')}
-                          </div>
-                        )}
-                        {topic.learning_objectives?.length > 0 && (
-                          <ul style={{ margin: '4px 0 0', paddingLeft: 16, font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)' }}>
-                            {topic.learning_objectives.slice(0, 3).map((obj: string, j: number) => (
-                              <li key={j}>{obj}</li>
-                            ))}
-                            {topic.learning_objectives.length > 3 && (
-                              <li style={{ listStyle: 'none', fontStyle: 'italic' }}>+{topic.learning_objectives.length - 3} more</li>
-                            )}
-                          </ul>
-                        )}
+                        <div className={styles.docInfo}>
+                          <span className={styles.docName}>{doc.name}</span>
+                        </div>
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => handleDeleteDoc(doc.name)}
+                          disabled={deletingFilename === doc.name}
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
+                <div style={{ marginTop: 'var(--space-6)' }}>
+                  <h3 className={styles.sectionTitle}>
+                    <BookOpen size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    Extracted Topics
+                  </h3>
+                  {topics.length === 0 ? (
+                    <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: 'var(--space-4)' }}>
+                      No topics extracted yet. Topics are extracted during curriculum processing.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                      {topics.map((topic, i) => (
+                        <div key={i} className={styles.topicCard}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <span className={styles.topicName}>{topic.topic_name}</span>
+                            <Badge variant="solid" color="secondary">{topic.bloom_level}</Badge>
+                          </div>
+                          {topic.subtopics?.length > 0 && (
+                            <div style={{ font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)', marginBottom: 4 }}>
+                              <Layers size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                              {topic.subtopics.join(', ')}
+                            </div>
+                          )}
+                          {topic.learning_objectives?.length > 0 && (
+                            <ul style={{ margin: '4px 0 0', paddingLeft: 16, font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)' }}>
+                              {topic.learning_objectives.slice(0, 3).map((obj: string, j: number) => (
+                                <li key={j}>{obj}</li>
+                              ))}
+                              {topic.learning_objectives.length > 3 && (
+                                <li style={{ listStyle: 'none', fontStyle: 'italic' }}>+{topic.learning_objectives.length - 3} more</li>
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

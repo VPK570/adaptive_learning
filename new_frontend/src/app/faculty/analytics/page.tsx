@@ -41,34 +41,47 @@ export default function FacultyAnalyticsPage() {
     if (courses.length > 0 && !courseCode) setCourseCode(courses[0].course_code);
   }, [courses]);
 
-  const { data: analytics } = useQuery({
+  const { data: analytics, isLoading: analyticsLoading, isError: analyticsError } = useQuery({
     queryKey: ['analytics', courseCode],
     queryFn: () => api.get('/analytics', { params: { course_code: courseCode } }).then(r => r.data),
     enabled: !!courseCode,
     staleTime: 30_000,
   });
 
-  const { data: questions = [] } = useQuery({
+  const { data: questions = [], isLoading: questionsLoading, isError: questionsError } = useQuery({
     queryKey: ['questions', courseCode],
     queryFn: () => api.get('/questions', { params: { course_code: courseCode } }).then(r => r.data || []),
     enabled: !!courseCode,
     staleTime: 30_000,
   });
 
-  const { data: coverage = {} } = useQuery({
+  const { data: coverage = {}, isLoading: coverageLoading, isError: coverageError } = useQuery({
     queryKey: ['coverage', courseCode],
     queryFn: () => api.get('/analytics/coverage', { params: { course_code: courseCode } }).then(r => r.data || {}),
     enabled: !!courseCode,
     staleTime: 30_000,
   });
 
-  const loading = !analytics || !questions || !coverage;
+  const loading = analyticsLoading || questionsLoading || coverageLoading;
+  const hasError = analyticsError || questionsError || coverageError;
 
   if (loading) {
     return (
       <AppShell navRole="faculty" activeNavKey="analytics" topBarVariant="search">
         <div className={styles.loadingContainer}>
           <div className={styles.spinner} />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <AppShell navRole="faculty" activeNavKey="analytics" topBarVariant="search">
+        <div className={styles.loadingContainer}>
+          <p style={{ font: 'var(--text-body-md)', color: 'var(--color-error)', textAlign: 'center' }}>
+            Failed to load analytics data. Please try again.
+          </p>
         </div>
       </AppShell>
     );
@@ -133,30 +146,34 @@ export default function FacultyAnalyticsPage() {
               )}
             </div>
           </div>
-          <div className={styles.statTile}>
-            <div className={styles.statIcon} style={{ background: 'rgba(255, 180, 171, 0.2)', color: 'var(--color-error)' }}>
-              <AlertTriangle size={20} />
+          {(weakTopics.length > 0 || suggestedRevision.length > 0) && (
+            <div className={styles.statTile}>
+              <div className={styles.statIcon} style={{ background: 'rgba(255, 180, 171, 0.2)', color: 'var(--color-error)' }}>
+                <AlertTriangle size={20} />
+              </div>
+              <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
+                Weak Topics
+              </span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                <span className={styles.statValue}>{String(weakTopics.length).padStart(2, '0')}</span>
+                <span className={styles.statChange}>High priority</span>
+              </div>
             </div>
-            <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
-              Weak Topics
-            </span>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
-              <span className={styles.statValue}>{String(weakTopics.length).padStart(2, '0')}</span>
-              <span className={styles.statChange}>High priority</span>
+          )}
+          {(suggestedRevision.length > 0 || weakTopics.length > 0) && (
+            <div className={styles.statTile}>
+              <div className={styles.statIcon} style={{ background: 'rgba(78, 222, 163, 0.1)', color: 'var(--color-secondary)' }}>
+                <Lightbulb size={20} />
+              </div>
+              <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
+                Suggested Revisions
+              </span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                <span className={styles.statValue}>{String(suggestedRevision.length).padStart(2, '0')}</span>
+                <span className={styles.statChange}>Based on trends</span>
+              </div>
             </div>
-          </div>
-          <div className={styles.statTile}>
-            <div className={styles.statIcon} style={{ background: 'rgba(78, 222, 163, 0.1)', color: 'var(--color-secondary)' }}>
-              <Lightbulb size={20} />
-            </div>
-            <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
-              Suggested Revisions
-            </span>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
-              <span className={styles.statValue}>{String(suggestedRevision.length).padStart(2, '0')}</span>
-              <span className={styles.statChange}>Based on trends</span>
-            </div>
-          </div>
+          )}
         </div>
 
         <div className={styles.bentoGrid}>
@@ -229,7 +246,7 @@ export default function FacultyAnalyticsPage() {
                 </p>
               )}
             </div>
-            <button className={styles.downloadBtn} onClick={() => alert('Report download started (simulated).')}>
+            <button className={styles.downloadBtn} onClick={() => window.open(`/api/analytics/report/${courseCode}`, '_blank')}>
               Download Report
             </button>
           </div>
@@ -268,7 +285,7 @@ export default function FacultyAnalyticsPage() {
                 <span key={t} className={`${styles.tagChip} ${styles.tagChipSecondary}`}>{t}</span>
               ))}
               {suggestedRevision.length === 0 && (
-                <span style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)' }}>No suggested revisions.</span>
+                <span style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)' }}>Upload materials and tag them with topics to get AI suggestions.</span>
               )}
             </div>
             {suggestedRevision.length > 0 && (
@@ -281,7 +298,7 @@ export default function FacultyAnalyticsPage() {
           </div>
         </div>
 
-        {topicCoverage.length > 0 && (
+        {topicCoverage.length > 0 ? (
           <div className={styles.sectionCard}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
               <BookOpen size={20} style={{ color: 'var(--color-primary)' }} />
@@ -310,6 +327,16 @@ export default function FacultyAnalyticsPage() {
                 </div>
               ))}
             </div>
+          </div>
+        ) : (
+          <div className={styles.sectionCard}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+              <BookOpen size={20} style={{ color: 'var(--color-primary)' }} />
+              <h3 style={{ font: 'var(--text-headline-sm)', color: 'var(--color-on-surface)' }}>Topic Coverage</h3>
+            </div>
+            <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: 'var(--space-10) 0' }}>
+              Upload a curriculum PDF to extract topics and track coverage.
+            </p>
           </div>
         )}
 
