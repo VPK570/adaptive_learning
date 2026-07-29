@@ -29,58 +29,66 @@ export const chatApi = {
   feedback: (data: ChatFeedbackRequest) =>
     api.post<{ status: string; bloom_level?: number }>('/chat/feedback', data).then(r => r.data),
 
-  queryStream: (
-    body: QueryRequest,
-    onContent: (text: string) => void,
-    onThinking: (text: string) => void,
-    onMetadata: (meta: Record<string, unknown>) => void,
-    onError: (err: Error) => void,
-  ): Promise<void> => {
+  queryWebSocket: (
+    params: {
+      question: string; course_code: string; session_id: string;
+      language?: string; mastery?: number; bloom_level?: number;
+      top_k?: number; image_ids?: string[];
+    },
+    callbacks: {
+      onThinking: (text: string) => void;
+      onContent: (text: string) => void;
+      onMetadata: (meta: Record<string, unknown>) => void;
+      onDone: () => void;
+      onError: (err: Error) => void;
+    },
+  ): { close: () => void; cancel: () => void; regenerate: () => void } => {
     const token = useAuthStore.getState().token;
-    return fetch('/query-stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(body),
-    }).then(async (response) => {
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(`Server error ${response.status}: ${text}`);
-      }
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
-      const decoder = new TextDecoder();
-      let buffer = '';
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${proto}//${window.location.host}/query/ws?token=${token}`;
+    let ws = new WebSocket(url);
+    let closed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-      let eventCount = 0;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) { console.log('[SSE] stream done, total events:', eventCount); break; }
-        const decoded = decoder.decode(value, { stream: true });
-        console.log('[SSE] chunk received, bytes:', value.length, 'decoded length:', decoded.length, 'preview:', decoded.slice(0, 100));
-        buffer += decoded;
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const trimmed = line.replace(/\r$/, '');
-          if (trimmed.startsWith('data: ')) {
-            eventCount++;
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              console.log('[SSE] event #' + eventCount + ' type=' + data.type + (data.content ? ' content_len=' + data.content.length : ''));
-              if (data.type === 'thinking') {
-                onThinking(data.content);
-              } else if (data.type === 'content') {
-                onContent(data.content);
-              } else if (data.type === 'metadata') {
-                onMetadata(data);
-              }
-            } catch { console.log('[SSE] malformed line:', trimmed.slice(0, 80)); }
-          }
-        }
+    const send = (msg: object) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
       }
-    }).catch(onError);
+    };
+
+    const cleanup = () => {
+      closed = true;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (ws) { ws.onopen = null; ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(); ws = null; }
+    };
+
+    ws.onopen = () => {
+      send({ type: 'query', data: params });
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'thinking') { callbacks.onThinking(msg.content); }
+        else if (msg.type === 'content') { callbacks.onContent(msg.content); }
+        else if (msg.type === 'metadata') { callbacks.onMetadata(msg); }
+        else if (msg.type === 'done') { cleanup(); callbacks.onDone(); }
+        else if (msg.type === 'error') { cleanup(); callbacks.onError(new Error(msg.content)); }
+      } catch {}
+    };
+
+    ws.onerror = () => {
+      if (!closed) { cleanup(); callbacks.onError(new Error('WebSocket connection error')); }
+    };
+
+    ws.onclose = () => {
+      if (!closed) { cleanup(); callbacks.onError(new Error('WebSocket connection closed')); }
+    };
+
+    return {
+      close: cleanup,
+      cancel: () => send({ type: 'cancel' }),
+      regenerate: () => send({ type: 'regenerate' }),
+    };
   },
 };

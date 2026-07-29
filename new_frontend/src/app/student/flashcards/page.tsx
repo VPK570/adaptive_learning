@@ -201,14 +201,16 @@ export default function FlashcardsPage() {
                   </div>
                   <div className={styles.formRow}>
                     <label>Topic Focus</label>
-                    <select className={styles.selectField} value={topic} onChange={e => handleTopicChange(e.target.value)}>
-                      {topics.length === 0 && <option value="">No topics available</option>}
+                    <input list="fc-topics" className={styles.selectField}
+                      value={topic}
+                      onChange={e => handleTopicChange(e.target.value)}
+                      placeholder="Type a topic or select from suggestions..."
+                    />
+                    <datalist id="fc-topics">
                       {topics.map(t => (
-                        <option key={t.topic_name} value={t.topic_name}>
-                          {t.topic_name} ({t.bloom_level})
-                        </option>
+                        <option key={t.topic_name} value={t.topic_name} />
                       ))}
-                    </select>
+                    </datalist>
                   </div>
                   <div className={styles.formRow}>
                     <label>Card Count</label>

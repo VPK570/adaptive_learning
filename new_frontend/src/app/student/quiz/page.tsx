@@ -218,9 +218,10 @@ export default function QuizPage() {
                 </div>
                 <div style={{ marginTop: 'var(--space-6)' }}>
                   <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>Topic Focus</p>
-                  <select
+                  <input list="quiz-topics"
                     value={topic}
                     onChange={(e) => handleTopicChange(e.target.value)}
+                    placeholder="Type a topic or select from suggestions..."
                     style={{
                       width: '100%',
                       background: 'var(--color-surface-container-low)',
@@ -230,16 +231,13 @@ export default function QuizPage() {
                       fontSize: 14,
                       color: 'var(--color-on-surface)',
                       outline: 'none',
-                      cursor: 'pointer',
                     }}
-                  >
-                    {topics.length === 0 && <option value="">No topics available</option>}
+                  />
+                  <datalist id="quiz-topics">
                     {topics.map(t => (
-                      <option key={t.topic_name} value={t.topic_name}>
-                        {t.topic_name} ({t.bloom_level})
-                      </option>
+                      <option key={t.topic_name} value={t.topic_name} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
 

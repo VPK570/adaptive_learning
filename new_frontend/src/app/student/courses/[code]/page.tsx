@@ -19,19 +19,21 @@ import { useToast } from '@/app/components/ToastContext';
 import styles from './CourseDetail.module.css';
 
 function cite(text: string) {
-  return text.replace(
+  const withCites = text.replace(
     /\[(Source|Curriculum):([^\]]*)\]/g,
     (_, type, rest) => `<cite class="citation-inline">${type}:${rest}</cite>`
   );
+  return withCites.replace(/<(\/?)(?!cite\b)[a-zA-Z][^>]*>/g, '');
 }
 
-const ChatMessage = React.memo(({ msg, feedbackLoading, onFeedback }: {
+const ChatMessage = React.memo(({ msg, feedbackLoading, onFeedback, isStreaming }: {
   msg: ChatMessage;
   feedbackLoading: Record<number, boolean>;
   onFeedback: (msgId: number, helpful: boolean) => void;
+  isStreaming?: boolean;
 }) => {
   return (
-    <div className={`${styles.messageBubble} ${styles[msg.role]}`}>
+    <div className={`${styles.messageBubble} ${styles[msg.role]} ${isStreaming ? styles.streaming : ''}`}>
       <div className={styles.assistantContent}>
         {msg.images && msg.images.length > 0 && (
           <div className={styles.msgImages}>
@@ -49,9 +51,15 @@ const ChatMessage = React.memo(({ msg, feedbackLoading, onFeedback }: {
             <div className={styles.thinkingContent}>{msg.thinkingText}</div>
           </details>
         )}
-        <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-          {cite(msg.text)}
-        </ReactMarkdown>
+        {isStreaming && !msg.text ? (
+          <div className={styles.typingIndicator}>
+            <span /><span /><span />
+          </div>
+        ) : (
+          <ReactMarkdown className={styles.msgText} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+            {cite(msg.text)}
+          </ReactMarkdown>
+        )}
         {msg.sources && msg.sources.length > 0 && (
           <div className={styles.sourcesBlock}>
             <span className={styles.sourcesLabel}>Sources:</span>
@@ -67,7 +75,7 @@ const ChatMessage = React.memo(({ msg, feedbackLoading, onFeedback }: {
             ⚠️ This answer may not be based on your course materials. {msg.verificationReason}
           </div>
         )}
-        {msg.role === 'assistant' && msg.text && (
+        {msg.role === 'assistant' && msg.text && !isStreaming && (
           <div className={styles.msgActions}>
             <button className={styles.msgActionBtn}><Copy size={14} /> Copy</button>
             <button className={styles.msgActionBtn} onClick={() => onFeedback(msg.id, true)} disabled={feedbackLoading[msg.id]}>
@@ -97,6 +105,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
   const [feedbackLoading, setFeedbackLoading] = useState<Record<number, boolean>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wsRef = useRef<{ close: () => void; cancel: () => void; regenerate: () => void } | null>(null);
   const sessionId = `course_${code}`;
 
   useEffect(() => {
@@ -146,6 +155,10 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
     setImagePreviews(prev => { const p = prev.filter(x => x.id !== id); return p; });
   }, []);
 
+  useEffect(() => {
+    return () => wsRef.current?.close();
+  }, []);
+
   const handleSend = useCallback(() => {
     if ((!inputValue.trim() && imageIds.length === 0) || streaming || !course) return;
     const userText = inputValue;
@@ -159,42 +172,44 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
     const assistantId = crypto.randomUUID();
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '', thinkingText: '' }]);
 
-    let fullText = '';
-
-    chatApi.queryStream(
-      { question: userText, course_code: code, session_id: sessionId, bloom_level: bloomLevel, image_ids: imageIds.length > 0 ? imageIds : undefined },
-      (content) => {
-        console.log('[PAGE] onContent chunk len=' + content.length + ' total=' + (fullText.length + content.length));
-        fullText += content;
-        setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, text: (m.text || '') + content } : m
-        ));
+    wsRef.current?.close();
+    wsRef.current = chatApi.queryWebSocket(
+      {
+        question: userText, course_code: code, session_id: sessionId,
+        bloom_level: bloomLevel, image_ids: imageIds.length > 0 ? imageIds : undefined,
       },
-      (content) => {
-        console.log('[PAGE] onThinking chunk len=' + content.length);
-        setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, thinkingText: (m.thinkingText || '') + content } : m
-        ));
+      {
+        onThinking: (content) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId ? { ...m, thinkingText: (m.thinkingText || '') + content } : m
+          ));
+        },
+        onContent: (content) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId ? { ...m, text: (m.text || '') + content } : m
+          ));
+        },
+        onMetadata: (meta) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  sources: ((meta.cited_sources || meta.sources || []) as Array<Record<string, unknown>>).map(s => ({ file: (s.source_title || s.file) as string, page: s.page as number })),
+                  verified: meta.verified as boolean,
+                  verificationReason: meta.verification_reason as string,
+                }
+              : m
+          ));
+        },
+        onDone: () => {
+          setMessages(prev => prev.filter(m => m.id !== assistantId || m.text));
+          setStreaming(false);
+        },
+        onError: () => {
+          setStreaming(false);
+        },
       },
-      (meta) => {
-        console.log('[PAGE] onMetadata', JSON.stringify(meta));
-        setMessages(prev => prev.map(m =>
-          m.id === assistantId
-            ? {
-                ...m,
-                sources: (meta.cited_sources || meta.sources || []).map(s => ({ file: s.source_title || s.file, page: s.page })),
-                verified: meta.verified,
-                verificationReason: meta.verification_reason,
-              }
-            : m
-        ));
-        setStreaming(false);
-        chatApi.saveMessage(code, sessionId, 'assistant', fullText).catch(() => {});
-      },
-      () => { console.log('[PAGE] onError/onDone'); setStreaming(false); }
     );
-
-    chatApi.saveMessage(code, sessionId, 'user', userText).catch(() => {});
   }, [inputValue, streaming, course, code, sessionId, imageIds, bloomLevel]);
 
   const handleFeedback = useCallback(async (msgId: number, helpful: boolean) => {
@@ -281,8 +296,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
             ) : messages.length === 0 ? (
               <p className={styles.msgText}>Ask a question about your course materials.</p>
             ) : (
-              messages.map(msg => (
-                <ChatMessage key={msg.id} msg={msg} feedbackLoading={feedbackLoading} onFeedback={handleFeedback} />
+              messages.map((msg, idx) => (
+                <ChatMessage key={msg.id} msg={msg} feedbackLoading={feedbackLoading} onFeedback={handleFeedback}
+                  isStreaming={streaming && idx === messages.length - 1 && msg.role === 'assistant'} />
               ))
             )}
             <div ref={chatEndRef} />
