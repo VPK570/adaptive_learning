@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/authStore';
 
@@ -10,7 +10,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.replace('/');
+      router.replace('/?redirect=' + encodeURIComponent(window.location.pathname));
     } else if (user?.role && user.role !== 'student') {
       if (user.role === 'faculty') router.replace('/faculty/dashboard');
       else if (user.role === 'admin') router.replace('/admin/dashboard');
@@ -19,5 +19,5 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   if (!isAuthenticated || (user?.role && user.role !== 'student')) return null;
 
-  return <>{children}</>;
+  return <Suspense fallback={<div style={{padding:'40px',textAlign:'center',color:'var(--color-text-secondary)'}}>Loading...</div>}>{children}</Suspense>;
 }

@@ -20,8 +20,13 @@ ENV NODE_ENV production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./standalone
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./standalone/.next/static
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/node_modules/http-proxy ./node_modules/http-proxy
+COPY --from=builder /app/node_modules/eventemitter3 ./node_modules/eventemitter3
+COPY --from=builder /app/node_modules/follow-redirects ./node_modules/follow-redirects
+COPY --from=builder /app/node_modules/requires-port ./node_modules/requires-port
 USER nextjs
 EXPOSE 3000
 ENV PORT 3000

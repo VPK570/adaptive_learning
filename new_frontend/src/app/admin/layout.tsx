@@ -10,7 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.replace('/');
+      router.replace('/?redirect=' + encodeURIComponent(window.location.pathname));
     } else if (user?.role && user.role !== 'admin') {
       if (user.role === 'student') router.replace('/student/dashboard');
       else if (user.role === 'faculty') router.replace('/faculty/dashboard');

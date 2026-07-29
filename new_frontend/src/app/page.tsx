@@ -17,6 +17,9 @@ export default function Home() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect');
+      if (redirect) { router.replace(redirect); return; }
       if (user.role === 'faculty') router.replace('/faculty/dashboard');
       else if (user.role === 'admin') router.replace('/admin/dashboard');
       else router.replace('/student/dashboard');
@@ -63,7 +66,11 @@ export default function Home() {
       const selectedRole = roleMap[tabs[activeTab]];
       await storeLogin(email, password);
 
-      const redirectRole = selectedRole;
+      const { user } = useAuthStore.getState();
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect');
+      if (redirect) { router.push(redirect); return; }
+      const redirectRole = user?.role || selectedRole;
       if (redirectRole === 'faculty') {
         router.push('/faculty/dashboard');
       } else if (redirectRole === 'admin') {
