@@ -107,6 +107,9 @@ def build_context_window(
     history: list[dict],
     max_turns: int = settings.MAX_HISTORY_TURNS,
 ) -> str:
+    if not chunks:
+        return "NOTE: No relevant course materials were found for this question. Answer using general knowledge — no citations required."
+
     parts = ["COURSE MATERIALS:"]
 
     text_chunks = [c for c in chunks if c.get("content_type", "text") != "image"]
@@ -256,6 +259,7 @@ class QueryEngine:
             search_queries = await generate_search_queries(
                 query, course_ctx,
                 num_queries=settings.QUERY_ENHANCER_NUM_QUERIES,
+                model=settings.QUIZ_MODEL,
             )
         else:
             search_queries = [query]
@@ -375,6 +379,7 @@ class QueryEngine:
             search_queries = await generate_search_queries(
                 query, course_ctx,
                 num_queries=settings.QUERY_ENHANCER_NUM_QUERIES,
+                model=settings.QUIZ_MODEL,
             )
         else:
             search_queries = [query]

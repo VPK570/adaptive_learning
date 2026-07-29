@@ -1,10 +1,12 @@
+import asyncio
 import base64
 import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from fastapi import WebSocket, WebSocketDisconnect
 
 from app.auth import get_current_user_from_request
 from app.deps import get_engine, get_knowledge_state, get_rag
@@ -107,6 +109,142 @@ async def get_chunks(
         )
         for c in chunks
     ]
+
+
+@router.websocket("/query/ws")
+async def query_ws(
+    websocket: WebSocket,
+    token: str = Query(""),
+):
+    from app.auth import decode_token
+    user = decode_token(token) if token else None
+    if not user:
+        await websocket.close(code=4001)
+        return
+    await websocket.accept()
+
+    cancel_event = asyncio.Event()
+    query_queue: asyncio.Queue = asyncio.Queue(maxsize=1)
+    last_query_data = None
+    gen_task = None
+
+    async def receiver():
+        nonlocal last_query_data, gen_task
+        try:
+            async for raw in websocket.iter_json():
+                t = raw.get("type")
+                if t == "ping":
+                    await websocket.send_json({"type": "pong"})
+                elif t == "cancel":
+                    cancel_event.set()
+                elif t == "regenerate":
+                    if last_query_data is not None:
+                        cancel_event.set()
+                        if gen_task is not None and not gen_task.done():
+                            gen_task.cancel()
+                        await query_queue.put(last_query_data)
+                elif t == "query":
+                    data = raw.get("data", {})
+                    last_query_data = data
+                    cancel_event.set()
+                    if gen_task is not None and not gen_task.done():
+                        gen_task.cancel()
+                    await query_queue.put(data)
+        except WebSocketDisconnect:
+            cancel_event.set()
+            if gen_task is not None and not gen_task.done():
+                gen_task.cancel()
+
+    async def runner():
+        nonlocal gen_task
+        from app.chat_history import add_message, get_course_history
+        from app.db import get_db
+        from app.query_engine import QueryEngine
+        engine = QueryEngine()
+        while True:
+            data = await query_queue.get()
+            cancel_event.clear()
+            gen_task = asyncio.current_task()
+
+            full_response = ""
+            metadata = {}
+
+            try:
+                history = await get_course_history(
+                    data.get("course_code", ""),
+                    data.get("session_id", "default"),
+                )
+                image_data = None
+                image_ids = data.get("image_ids") or []
+                if image_ids:
+                    loaded = []
+                    for img_id in image_ids:
+                        img_path = (UPLOAD_DIR / img_id).resolve()
+                        if not str(img_path).startswith(str(UPLOAD_DIR.resolve())):
+                            continue
+                        if not img_path.is_file():
+                            continue
+                        raw_bytes = img_path.read_bytes()
+                        ext = img_path.suffix.lower()
+                        mime = "image/jpeg" if ext == ".jpg" else "image/png"
+                        loaded.append({"b64": base64.b64encode(raw_bytes).decode(), "mime": mime})
+                    if loaded:
+                        image_data = loaded
+
+                async for chunk in engine.query_stream(
+                    query=data.get("question", ""),
+                    course_code=data.get("course_code", ""),
+                    course_name=data.get("course_code", ""),
+                    language=data.get("language", "English"),
+                    mastery=data.get("mastery"),
+                    bloom_level=data.get("bloom_level"),
+                    history=history,
+                    top_k=data.get("top_k", 5),
+                    images=image_data,
+                ):
+                    if cancel_event.is_set():
+                        break
+                    await websocket.send_json(chunk)
+                    if chunk["type"] == "content":
+                        full_response += chunk["content"]
+                    elif chunk["type"] == "metadata":
+                        metadata = chunk
+
+                if not cancel_event.is_set():
+                    await websocket.send_json({"type": "done"})
+                    if full_response:
+                        try:
+                            cc = data.get("course_code", "")
+                            sid = data.get("session_id", "default")
+                            uid = user.get("email", "")
+                            q = data.get("question", "")
+                            db = await get_db()
+                            await db.query(
+                                "CREATE query_log CONTENT { course_code: $cc, question: $q, response_preview: $r, cited_sources: $s, user_id: $uid, out_of_scope: false, timestamp: time::now() }",
+                                {"cc": cc, "q": q, "r": full_response[:200], "s": metadata.get("cited_sources", []), "uid": uid},
+                            )
+                            user_content = json.dumps({"text": q, "images": image_ids})
+                            await add_message(cc, sid, "user", user_content, user_id=uid)
+                            await add_message(cc, sid, "assistant", full_response, user_id=uid)
+                        except Exception as e:
+                            logger.error("Failed to persist query_log for course=%s: %s", data.get("course_code"), e)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.exception("WS query failed")
+                try:
+                    await websocket.send_json({"type": "error", "content": str(e)})
+                except Exception:
+                    pass
+
+    try:
+        await asyncio.gather(receiver(), runner())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        cancel_event.set()
+        if gen_task is not None and not gen_task.done():
+            gen_task.cancel()
 
 
 @router.post("/query-stream")

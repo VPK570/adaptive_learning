@@ -215,7 +215,7 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS user_id ON TABLE flashcard_set TYPE string;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE flashcard_set TYPE string;
             DEFINE FIELD IF NOT EXISTS topic ON TABLE flashcard_set TYPE string;
-            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE flashcard_set TYPE int;
+            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE flashcard_set TYPE option<int>;
             DEFINE FIELD IF NOT EXISTS cards ON TABLE flashcard_set TYPE any;
             DEFINE FIELD IF NOT EXISTS created_at ON TABLE flashcard_set TYPE datetime DEFAULT time::now();
             DEFINE INDEX IF NOT EXISTS flashcard_course_idx ON TABLE flashcard_set FIELDS course_code;

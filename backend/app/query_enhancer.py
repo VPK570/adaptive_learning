@@ -23,6 +23,7 @@ async def generate_search_queries(
     query: str,
     course_context: dict[str, Any],
     num_queries: int = 3,
+    model: str | None = None,
 ) -> list[str]:
     """
     Generate N diverse search queries from the user's question + course context.
@@ -65,6 +66,7 @@ async def generate_search_queries(
         result = await client.chat_with_schema(
             messages=messages,
             response_schema=schema,
+            model=model,
             max_tokens=1024,
         )
         queries = result.get("queries", [])

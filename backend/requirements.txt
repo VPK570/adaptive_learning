@@ -16,4 +16,5 @@ pydantic[email]
 slowapi
 nltk
 celery[redis]
+redis>=5.0
 # py-fsrs — spaced repetition scheduler (requires Python <3.14 for now)

@@ -1,6 +1,7 @@
 import asyncio
-import os
 import logging
+import os
+
 from celery import Celery, signals
 
 from app.logging_middleware import request_id_var
@@ -70,3 +71,5 @@ def ingest_curriculum_task(self, course_code: str, document_title: str, filepath
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
+
+

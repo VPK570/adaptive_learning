@@ -5,13 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_current_user_from_request
 from app.bloom_classifier import classify_bloom_levels
 from app.config import settings
+from app.courses import get_all_courses_data
 from app.db import get_db
 from app.deps import get_knowledge_state, get_rag
 from app.knowledge_state import BLOOM_LABELS, KnowledgeStateManager
 from app.provider_router import router as client
+from app.query_enhancer import generate_search_queries
 from app.rag import RAGPipeline
 from app.routers.flashcards import safe_json_parse
 from app.schemas import QuizRequest, SaveQuizRequest
+from app.topics import get_course_topics
 from app.validation import MAX_TOPIC_LENGTH, sanitize_text, validate_course_code
 
 router = APIRouter()
@@ -28,11 +31,50 @@ async def generate_quiz(
     if not topic:
         raise HTTPException(400, "Quiz topic cannot be empty.")
 
-    chunks = await rag.retrieve(query=topic, course_code=course_code, top_k=10)
-    if not chunks:
+    courses = await get_all_courses_data()
+    course_info = next((c for c in courses if c["course_code"] == course_code), {})
+    db = await get_db()
+    rows = await db.query(
+        "SELECT source_title, text FROM text_chunk WHERE course_code = $code ORDER BY source_title LIMIT 50",
+        {"code": course_code},
+    ) or []
+    doc_previews = []
+    seen = set()
+    for r in rows:
+        t = r["source_title"]
+        if t not in seen:
+            seen.add(t)
+            doc_previews.append({"name": t, "preview": (r.get("text") or "")[:200]})
+    topics = await get_course_topics(course_code)
+    curr_text = "\n".join(
+        f"{t['topic_name']}" + (" — " + "; ".join(t.get("subtopics", [])) if t.get("subtopics") else "")
+        for t in topics
+    ) if topics else ""
+    course_ctx = {
+        "course_name": course_info.get("course_name", course_code),
+        "course_description": course_info.get("description", ""),
+        "documents": doc_previews,
+        "curriculum_topics": curr_text,
+    }
+
+    search_queries = [topic]
+    if settings.QUERY_ENHANCER_ENABLED:
+        enhanced = await generate_search_queries(topic, course_ctx, settings.QUERY_ENHANCER_NUM_QUERIES, model=settings.QUIZ_MODEL)
+        search_queries = list(dict.fromkeys(enhanced + [topic]))
+    all_chunks = []
+    seen_ids = set()
+    for sq in search_queries:
+        for c in await rag.retrieve(query=sq, course_code=course_code, top_k=5):
+            cid = c.get("chunk_id") or str(c.get("id", ""))
+            if cid not in seen_ids:
+                seen_ids.add(cid)
+                all_chunks.append(c)
+
+    if not all_chunks:
         raise HTTPException(404, "No materials found to generate a quiz.")
 
-    context = "\n".join([c["text"] for c in chunks if c.get("text")])
+    chunks = all_chunks[:10]
+    context = "\n".join(c["text"] for c in chunks if c.get("text"))
 
     bloom_instruction = ""
     if body.bloom_levels:

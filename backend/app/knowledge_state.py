@@ -81,12 +81,16 @@ class KnowledgeStateManager:
             "total_attempts": total,
             "correct_attempts": correct,
             "streak": streak,
-            "difficulty": existing_defaults.get("difficulty", 0.5),
-            "stability": existing_defaults.get("stability"),
             "last_reviewed_at": now,
-            "next_review_at": existing_defaults.get("next_review_at", now),
             "updated_at": now,
         }
+        if existing_defaults.get("difficulty") is not None:
+            data["difficulty"] = existing_defaults["difficulty"]
+        if existing_defaults.get("stability") is not None:
+            data["stability"] = existing_defaults["stability"]
+        next_review = existing_defaults.get("next_review_at")
+        if next_review is not None:
+            data["next_review_at"] = next_review
 
         res = await db.query(
             "UPDATE knowledge_state MERGE $data WHERE student_id = $sid AND course_code = $cc AND topic_id = $tid AND bloom_level = $bl RETURN AFTER",
