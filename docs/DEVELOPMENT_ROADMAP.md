@@ -45,58 +45,76 @@ Bloom classifier as missing — confirming the gap was known.
 ### 2.2 Literature Review (24 candidate ideas across 4 categories)
 
 **Category 1: Knowledge Tracing & Student Modeling**
-| Idea | Verdict | Reason |
-|------|---------|--------|
-| Multi-modal KT | ❌ Skip | MMKT (IEEE TCSS 2025), LEA (2026) already solve this |
-| Uncertainty-aware KT | ❌ Skip | UKT (AAAI 2025) with code released — solved |
-| Cross-course transfer | ❌ Skip | TransKT (IJCAI 2025), ACKT (WWW 2026) — solved |
-| KG from PDFs | ❌ Skip | InstructKG, CourseMapper (2025) — commoditized |
-| Interaction-based KT | ❌ Skip | LLMKT (LAK 2025), DiaCDM — solved |
-| **Personalized forgetting curves** | ✅ **Adopt** | Gap: FSRS uses 19 global params, DKT has no explicit forgetting. No one learns per-student decay/strength/threshold parameters in a neural KT framework. |
+| Idea | Verdict | Reason | Ref |
+|------|---------|--------|-----|
+| Multi-modal KT | ❌ Skip | MMKT fuses text/image/cognitive/KG modalities (~3.5% AUC over DKT). LEA deploys tri-modal agent in classroom. | [38], [39] |
+| Uncertainty-aware KT | ❌ Skip | UKT (AAAI 2025) separates epistemic from aleatory uncertainty with Gaussian embeddings. Code released. | [23] |
+| Cross-course transfer | ❌ Skip | TransKT (IJCAI 2025) uses LLM-built concept graphs + GCN. ACKT (WWW 2026) handles cross-disciplinary cold-start. | [40], [41] |
+| KG from PDFs | ❌ Skip | InstructKG and CourseMapper provide end-to-end PDF-to-KG pipelines. Precision 1.0 on benchmarks. | [42], [43] |
+| Interaction-based KT | ❌ Skip | LLMKT (LAK 2025) fine-tunes Llama-3.1-8B on dialogue KT. DiaCDM adds AMR graphs for cognitive diagnosis. | [44], [45] |
+| **Personalized forgetting curves** | ✅ **Adopt** | Gap: FSRS [27] uses 19 global params across all students. CPF [24] and memoryKT [26] compute personalized scores but not full per-student parameter sets. | — |
 
 **Category 2: Assessment & Content Generation**
-| Idea | Verdict | Reason |
-|------|---------|--------|
-| KG-based question generation | ❌ Skip | KNIGHT, KAQG, Q-Chain — solved |
-| Adaptive explanation generation | ❌ Skip | CLAF (EMNLP 2025), SNAPE-PM — solved |
-| Metacognitive wrappers | ❌ Skip | MetaCLASS (2026), well-established |
-| Pedagogical constraint satisfaction | ❌ Skip | MC-CPO, MWO — solved |
-| **Adversarial question generation** | ❌ Defer | GapProbe (AAAI 2026) just done it. Medium novelty, high effort. |
-| **Citation-backed short-answer grading** | ❌ Defer | Medium novelty but tangential to core tutor. |
+| Idea | Verdict | Reason | Ref |
+|------|---------|--------|-----|
+| KG-based question generation | ❌ Skip | KNIGHT uses topic KG for difficulty-controlled MCQ generation. KAQG and Q-Chain do KG-enhanced RAG QG. | [46], [47] |
+| Adaptive explanation generation | ❌ Skip | CLAF (EMNLP 2025) adapts complexity and style via KG retrieval + preference learning. SNAPE-PM uses Bayesian partner modeling. | [48], [49] |
+| Metacognitive wrappers | ❌ Skip | MetaCLASS formalizes 11 metacognitive coach moves with turn-level NO_INTERVENTION. Well-established in learning sciences. | [50] |
+| Pedagogical constraint satisfaction | ❌ Skip | MC-CPO provides RL with mastery-conditioned action spaces. MWO solves multi-objective ACS via memetic optimization. | [51], [52] |
+| **Adversarial question generation** | ❌ Defer | GapProbe (AAAI 2026) generates counterfactual follow-ups targeting KG-probed knowledge gaps. Medium novelty, high effort. | [53] |
+| **Citation-backed short-answer grading** | ❌ Defer | Fateen et al. (2024) uses RAG for scoring + feedback with citations. Medium novelty, tangential to core tutor. | [54] |
 
 **Category 3: Multi-Agent & Dialogue**
-| Idea | Verdict | Reason |
-|------|---------|--------|
-| Multi-agent dialogue | ❌ Skip | KELE (EMNLP 2025), IntelliCode — solved |
-| Dialogue act scaffolding | ❌ Skip | BIPED (2024), EDF (AAAI 2026) — solved |
-| Contrastive student representation | ❌ Skip | MSCL (2026), CORE, Coral — solved |
-| Misconception detection | ❌ Skip | MiRAGE (MAP@3 0.93) — saturated |
-| RL strategy selection | ❌ Defer | Medium novelty but high effort (needs reward modeling + student simulation) |
-| **Pedagogical CoT auditing** | ✅ **Adopt** | Gap: TRACE audits *whether* answers drove reasoning. No one makes pedagogical rationale a structured inspectable *output*. |
+| Idea | Verdict | Reason | Ref |
+|------|---------|--------|-----|
+| Multi-agent dialogue | ❌ Skip | KELE (EMNLP 2025) uses consultant-teacher dual-agent. IntelliCode (EACL 2026) has 6 specialized agents. | [35], [36] |
+| Dialogue act scaffolding | ❌ Skip | BIPED defines 34 tutor acts + 9 student acts with predict-act-generate. EDF (AAAI 2026) uses Evidence-Decision-Feedback. | [37], [65] |
+| Contrastive student representation | ❌ Skip | MSCL (2026) self-supervised graph contrastive for KT. Coral does collaborative CD with disentangled representation. | [59], [60] |
+| Misconception detection | ❌ Skip | MiRAGE achieves MAP@3 of 0.93 via retrieval-guided reasoning. ACL 2026 knowledge distillation reaches MAP@3 0.9585. | [61], [62] |
+| RL strategy selection | ❌ Defer | PEARL trains Socratic tutors via multi-objective RL. MHPO (ACL 2026) does multi-horizon preference optimization. High effort. | [10], [63] |
+| **Pedagogical CoT auditing** | ✅ **Adopt** | Gap: TRACE [14] audits *whether* answers drove reasoning. No one makes pedagogical rationale a structured inspectable *output*. | — |
 
 **Category 4: Evaluation, Fairness & Ethics**
-| Idea | Verdict | Reason |
-|------|---------|--------|
-| Pedagogical quality scoring | ❌ Skip | MRBench (2025), BEA 2025 shared task — solved |
-| Curriculum alignment verification | ❌ Skip | QuizWeaver, Curriculum Cartographer — solved |
-| Bias detection in content | ❌ Defer | Medium novelty, but tangential to core pipeline |
-| **Equity monitoring dashboard** | ✅ **Adopt** | Gap: All equity dashboards track *outcomes* (grades). None track *tutoring process quality* per demographic slice (leakage rate, scaffolding depth, citation quality). |
-| **Red teaming benchmark** | ❌ Defer | Hot area (SafeTutors, EduGuardBench, SHAPE all 2026). Useful but not core. |
-| **Answer-driven reasoning detection** | ❌ Defer | Single paper (Shen+ 2026), limited to math. Novel but specialized. |
+| Idea | Verdict | Reason | Ref |
+|------|---------|--------|-----|
+| Pedagogical quality scoring | ❌ Skip | MRBench [55] defines 8-dimension evaluation taxonomy. BEA 2025 shared task [56] operationalized 4 dimensions. | [55], [56] |
+| Curriculum alignment verification | ❌ Skip | QuizWeaver [57] enforces deterministic Bloom's/Webb's DOK alignment. Curriculum Cartographer [58] achieves ICC=0.874 with expert judges. | [57], [58] |
+| Bias detection in content | ❌ Defer | Gupta et al. (FAccT 2026) [18] found 2.55 grade-level gaps for marginalized profiles. Medium novelty, tangential. | [18] |
+| **Equity monitoring dashboard** | ✅ **Adopt** | Gap: All equity dashboards [19] track *outcomes* (grades). None track *tutoring process quality* per demographic slice (leakage rate, scaffolding depth, citation quality). FairTutor [20] tracks access-tier equity only. | — |
+| **Red teaming benchmark** | ❌ Defer | Hot area: SafeTutors [17] (11 harm dimensions), EduGuardBench [64], SHAPE [12] (9,087 question pairs). Useful but not core. | [17], [12], [64] |
+| **Answer-driven reasoning detection** | ❌ Defer | Single paper [14] (Shen+ 2026), limited to math. Novel but specialized. Generalization beyond math numeric is open. | [14] |
 
-### 2.3 Selection Rationale
+### 2.3 Novelty Summary
+
+| Category | Idea | Verdict | Patent | Paper | Key Reference |
+|----------|------|---------|--------|-------|---------------|
+| KT | Personalized forgetting curves | ✅ Adopt | ❌ | ✅ Journal | Bridging FSRS [27] and DKT gap |
+| Assessment | Adversarial question generation | ❌ Defer | ❌ | ✅ Conf | GapProbe (AAAI 2026) |
+| Assessment | Citation-backed grading | ❌ Defer | ❌ | ✅ Conf | Fateen et al. (2024) |
+| Dialogue | Pedagogical CoT auditing | ✅ Adopt | ✅ | ✅ Conf | TRACE [14] comparison |
+| Dialogue | RL strategy selection | ❌ Defer | ❌ | ✅ Conf | PEARL [10] |
+| Eval/Ethics | Equity monitoring dashboard | ✅ Adopt | ✅ | ✅ Short | No prior art for process equity |
+| Eval/Ethics | Red teaming benchmark | ❌ Defer | ❌ | ✅ Bench | SafeTutors [17] |
+| Eval/Ethics | Bias detection | ❌ Defer | ❌ | ✅ Conf | Gupta et al. (FAccT 2026) |
+| Eval/Ethics | Answer-driven reasoning | ❌ Defer | ❌ | ✅ Conf | TRACE [14] |
+| Core | Multi-Signal Bloom's Detector | ✅ Adopt | ❌ | ✅ Workshop | ε-tolerance + closed-loop |
+| Core | Leakage Scoring + Diff Redaction | ✅ Adopt | ✅ | ✅ Conf | Novel combination |
+| Bonus | Query Decomposition | ✅ Bonus | ❌ | ✅ Short | Ammann et al. (ACL 2025) |
+| Bonus | Red Teaming Benchmark | ✅ Bonus | ❌ | ✅ Bench | SafeTutors [17] |
+
+### 2.4 Selection Rationale
 
 From 24 candidates, **5 features** were selected plus **2 bonuses**:
 
 **Selected — Core Differentiation:**
-1. **Multi-Signal Bloom's Detector** — Paper only. The ε-tolerance margin and closed-loop verification are genuinely novel hooks in a saturated field.
-2. **Leakage Scoring + Differential Redaction** — Patent + paper. Continuous scoring + type-aware decomposition + DP-style redaction has zero prior art. Hot emerging field.
-3. **Pedagogical CoT Auditing** — Patent + paper. Making pedagogical rationale a structured inspectable artifact. Only TRACE (July 2026) comes close.
-4. **Equity Monitoring Dashboard** — Patent + paper. First system to track tutoring *process* quality per demographic slice.
-5. **Personalized Forgetting Curves** — Journal paper only. Bridges FSRS and DKT with per-student parameter estimation.
+1. **Multi-Signal Bloom's Detector** — Paper only. The ε-tolerance margin and closed-loop verification differentiate from 100+ existing papers (SOTA: Alammary & Masoud 2025, 96% [1]).
+2. **Leakage Scoring + Differential Redaction** — Patent + paper. No existing work combines continuous scoring with type-aware decomposition and DP-style redaction. Related: binary leakage [9], multi-dimension pedagogical scoring [10], safe RAG [11].
+3. **Pedagogical CoT Auditing** — Patent + paper. Only TRACE [14] is adjacent (audits answer-driven reasoning, not rationale). ES-LLMs [17] logs decisions but not structured traces.
+4. **Equity Monitoring Dashboard** — Patent + paper. First system to track tutoring *process* quality per demographic slice. Outcome equity dashboards exist [19]; process equity does not.
+5. **Personalized Forgetting Curves** — Journal paper only. FSRS [27] uses 19 global params. CPF [24] and memoryKT [26] compute personalized scores but not full interpretable parameter sets.
 
 **Bonus — Enhancement:**
-6. **Query Decomposition** — Paper only. Sub-question generation for multi-hop RAG retrieval. Modest novelty, low implementation cost.
+6. **Query Decomposition** — Paper only. Sub-question generation for multi-hop RAG. Modest novelty (Ammann et al. ACL 2025 [29], Petcu et al. EACL 2026 [30]).
 7. **Red Teaming Benchmark** — Benchmark paper. Standardized adversarial safety evaluation. Timely but not core.
 
 ---
@@ -188,7 +206,7 @@ backend/app/
 **ε-tolerance:** When top-2 scores differ by < ε, return multi-level label (e.g., "Understand/Apply").
 **Closed-loop:** Re-run same signal extractors on generated response. If response Bloom level ≠ planned level, trigger corrective regeneration.
 
-**Novelty:** Medium. ε-tolerance and closed-loop verification have no prior art in Bloom's classification literature (100+ papers).
+**Novelty:** Medium. The field is saturated: 100+ papers, SOTA 96% (DistilBERT + TF-IDF ensemble [1]), 89% with linguistic features [2], 92.37% RoBERTa ensemble [8]. BloomNet [5] (+POS+NER) and ETFPOS-IDF [3] are closest to multi-signal approaches. The proposed differentiators — ε-tolerance margin and closed-loop verification — have no direct prior art. Mahboob (2026) [4] analyzes classification ambiguity but does not propose ε-tolerance. Yaacoub et al. (2026) [7] does post-hoc verification but not reapplication of signal extractors.
 
 ### 5.2 Leakage Scoring + Differential Redaction
 
@@ -227,7 +245,7 @@ When leakage score > threshold:
 - Sim 0.5-0.8: ambiguous → existing LLM verifier makes the call
 - Sim < 0.5: response is off-curriculum → block immediately
 
-**Novelty:** High. Continuous scoring (not binary) + type-aware decomposition + differential redaction (not just blocking) has no prior art. Closest: Zhao et al. (ACL 2026) use binary leakage metric. PEARL uses multi-dimension but across pedagogical traits, not leakage. No existing work applies DP-style redaction to educational answer content.
+**Novelty:** High. Continuous scoring (not binary) + type-aware decomposition + differential redaction (not just blocking) has no prior art combination. Zhao et al. (ACL 2026) [9] evaluate answer leakage robustness with a binary metric — the first paper to define the leakage evaluation task. PEARL [10] uses multi-dimension pedagogical scoring but across 8 general pedagogical traits, not leakage-specific sub-dimensions. EduGuard [11] reports a 9.8% direct-answer leakage rate but uses a single metric. No existing work (a) decomposes answers by type before scoring, (b) applies DP-style structured redaction to educational answer content, or (c) combines continuous scoring with deterministic redaction in a single pipeline. The closest to differential redaction is RE-DACT [69], which applies DP to general structured/unstructured data — not to educational tutoring responses.
 
 ### 5.3 Pedagogical CoT Auditing
 
@@ -249,7 +267,7 @@ Generated via structured LLM call with schema validation (reusing `provider_rout
 - **Inspectable**: Visible in UI for faculty, logged for auditing
 - **Verifiable**: Claims in the trace can be checked against actual student state
 
-**Novelty:** Medium-High. TRACE (Shen+ 2026) audits *whether* answers drove reasoning. This makes reasoning *visible upfront*. ES-LLMs logs decisions but not structured rationale. No prior art for pedagogical rationale as a structured output artifact.
+**Novelty:** Medium-High. TRACE (Shen et al., 2026) [14] audits whether a tutor's reasoning is *answer-driven* via truncated CoT prefix probing — it detects a problem but does not produce structured rationale. ES-LLMs (SafeTutors framework [17]) logs agent decisions as rule-based traces but not as a machine-parseable, schema-enforced pedagogical rationale. ScaffoldLM [15] uses assessment-driven control loops with cognitive state inference but does not expose the rationale as an external artifact. No prior work generates pedagogical rationale as a structured, inspectable output with schema validation and verifiability constraints.
 
 ### 5.4 Equity Monitoring Dashboard
 
@@ -266,9 +284,11 @@ Generated via structured LLM call with schema validation (reusing `provider_rout
 | Gatekeeper refusal rate | % of queries refused | `gatekeeper.py` |
 | Bloom distribution | % of responses at each Bloom level | `bloom_fusion.py` |
 
-Dimensions (TBD during implementation): language, mastery band, course.
+Dimensions (proposed — requires IRB or ethics review before implementation): **language** (English vs. code-switching, stored in every request) and **mastery band** (<0.30 / 0.30-0.50 / 0.50-0.70 / ≥0.70). Limited to two dimensions to keep per-cell sample sizes meaningful. Expandable to course-level and topic-level aggregation later if data volume supports it.
 
-**Novelty:** High. All existing equity dashboards track *outcomes* (grades, pass rates). None track AI tutor *response quality per group*. FairTutor tracks access-tier equity, not demographic process equity.
+**Caveat:** Demographic dimension selection is sensitive. The initial implementation uses non-demographic dimensions (course, topic, mastery band) only. Demographic dimensions (language) require consultation with institutional ethics board before activation.
+
+**Novelty:** High. All existing equity dashboards track *outcomes* (grades, pass rates): Sloan-Lynch & Morse (LAK 2024) [19] built a Course Diversity Dashboard tracking outcome inequities. The CSU Course Equity Portal monitors grade equity gaps. FairTutor [20] tracks *access-tier* equity (premium vs. free AI), not demographic process equity. No existing system tracks whether different student groups receive different AI tutor *response quality* (leakage rate, scaffolding depth, citation rate, Socratic engagement). The Marked Pedagogies study [21] found systematic stereotype-aligned shifts in automated writing feedback — confirming the problem exists but providing no monitoring framework.
 
 ### 5.5 Personalized Forgetting Curves
 
@@ -282,7 +302,7 @@ Dimensions (TBD during implementation): language, mastery band, course.
 
 These are learned as student-specific embeddings via a hypernetwork on top of the existing DKT model in `deep_kt.py`. Parameters update after each quiz interaction.
 
-**Novelty:** Medium. CPF personalizes forgetting rates via embeddings. memoryKT computes a personalized score. No one learns a complete interpretable parameter set per student in a neural KT framework. Bridges the FSRS (global optimization) and DKT (deep learning) paradigms.
+**Novelty:** Medium. CPF (Wang et al., 2026) [24] personalizes forgetting rates via learned embeddings but not full interpretable parameter estimation. LefoKT (Bai et al., AAAI 2025) [25] decouples forgetting from problem relevance via relative attention. memoryKT (Lin et al., 2025) [26] computes a personalized forgetting score via VAE but does not estimate interpretable parameters. UKT (Cheng et al., AAAI 2025) [23] handles uncertainty but not forgetting parameters. FSRS [27][28] optimizes 19-21 global parameters shared across all students — the most widely deployed forgetting model but with no per-student customization. No existing work learns a complete interpretable parameter set (decay γᵢ, strength αᵢ, threshold βᵢ) per student in a neural KT framework, bridging the FSRS (global optimization) and DKT (deep learning) paradigms.
 
 ### 5.6 Query Decomposition (Bonus)
 
@@ -303,7 +323,7 @@ The existing dedup loop (lines 264-277) handles merging results from all queries
 
 **Graceful degradation:** On LLM failure, returns `[query]` — same as existing enhancer.
 
-**Novelty:** Low. Query decomposition for RAG is standard practice (20+ papers). Paper angle is an ablation study in the lecture-scoped setting.
+**Novelty:** Low. Query decomposition for RAG is standard practice. Ammann et al. (ACL 2025) [29] showed QD + reranking achieves MRR@10 +36.7% and F1 +11.6% on MultiHop-RAG. Petcu et al. (EACL 2026) [30] formulated QD as an exploration-exploitation bandit problem. ToR-Lite [31] eliminates LLM calls during decomposition entirely. UniRAG [32] and QDRAG (AAAI 2026) [33] both integrate QD with iterative reasoning and citation. Shaikh et al. (2026) [34] conducted a controlled ablation showing QD contributes +1.4 EM (p=0.004) on 5K HotpotQA questions. Paper angle is a lecture-scoped ablation study, not a novel method.
 
 ### 5.7 Red Teaming Benchmark (Bonus)
 
@@ -324,9 +344,21 @@ Runs as a CLI tool, generates a report of attack success rates per defense layer
 
 ## 6. Implementation Order & Phasing
 
+### Phase 0: Setup
+
+**Goal:** Establish baseline before feature work.
+
+| Step | Detail | Effort |
+|------|--------|--------|
+| 0.1 | Set `JWT_SECRET` in `backend/.env` to a real random value (currently `change_this_to_a_random_secret`) | 5 min |
+| 0.2 | Enable `GATEKEEPER_ENABLED=true` in `backend/app/config.py` (currently `false` for dev) | 5 min |
+| 0.3 | Run existing test suite: `cd backend && pytest tests/ -v` — establish baseline pass/fail | 10 min |
+| 0.4 | Run ruff: `cd backend && ruff check .` — establish baseline lint state | 5 min |
+| 0.5 | Ensure repo is private until provisional patent filings are complete | — |
+
 ### Phase 1: Patent Foundation (Priority: High)
 
-**Goal:** Build enough to file 3 provisional patents. No public code push before filing.
+**Goal:** Build enough to file 3 provisional patents. Repo remains private until filings complete.
 
 | Step | Files | Effort | Depends On |
 |------|-------|--------|------------|
@@ -400,11 +432,11 @@ Runs as a CLI tool, generates a report of attack success rates per defense layer
 
 ### 7.1 Patent Filings
 
-| # | Title | Type | Filing Window | Claims |
-|---|-------|------|--------------|--------|
-| P1 | "System and Method for Type-Aware Answer Decomposition and Differential Redaction for Leakage Prevention in AI Tutoring" | Indian Provisional | Before any public code push | Type-aware decomposition, continuous multi-dim scoring, differential redaction per answer category |
-| P2 | "Method for Generating and Validating Structured Pedagogical Rationale Traces in AI Tutoring Systems" | Indian Provisional | Within 6 months of P1 | Structured CoT rationale generation, schema-enforced trace validation, trace-based corrective regeneration |
-| P3 | "System for Demographic-Stratified Monitoring of AI Tutoring Process Quality" | Indian Provisional | Within 6 months of P1 | Process quality metrics (not outcomes), demographic stratification, automated equity alerting |
+| # | Title | Type | Filing Window | Key Claims |
+|---|-------|------|--------------|------------|
+| P1 | "System and Method for Type-Aware Answer Decomposition and Differential Redaction for Leakage Prevention in AI Tutoring" | Indian Provisional | Before any public code push | (a) Type-aware decomposition of expected answers into structural categories; (b) Continuous multi-dimensional leakage scoring with weighted sub-dimensions; (c) Category-specific differential redaction rules with configurable severity thresholds; (d) Tiered similarity-based gating (embedding → LLM → block) |
+| P2 | "Method for Generating and Validating Structured Pedagogical Rationale Traces in AI Tutoring Systems" | Indian Provisional | Within 6 months of P1 | (a) Schema-enforced structured rationale trace generation as part of the response pipeline; (b) Machine-parseable pedagogical decision log with strategy selection and avoidance reasons; (c) Verifiability constraints ensuring trace claims match actual student state |
+| P3 | "System for Demographic-Stratified Monitoring of AI Tutoring Process Quality" | Indian Provisional | Within 6 months of P1 | (a) Process quality metrics aggregated by demographic dimension (not outcome metrics); (b) Automated alerting on statistically significant disparities in leakage rate, scaffolding depth, or citation quality; (c) Privacy-preserving aggregation with minimum sample size thresholds |
 
 ### 7.2 Publication Pipeline
 
@@ -600,3 +632,153 @@ The differentiation strategy is:
 - Phase 5 (Forgetting curves): ~1 week
 - Phase 6 (Bonuses): ~1 week
 - **Total:** ~6-8 weeks for complete implementation
+
+---
+
+## 12. References
+
+### Bloom's Taxonomy Classification
+[1] A. Alammary and S. Masoud, "Towards Smarter Assessments: Enhancing Bloom's Taxonomy Classification with a Bayesian-Optimized Ensemble Model Using Deep Learning and TF-IDF Features," *Electronics*, vol. 14, no. 12, art. 2312, 2025. DOI: 10.3390/electronics14122312.
+
+[2] J. P. Tonde and S. Sankaye, "Ensemble-Based Question Classification Using Bloom's Taxonomy," in *Proc. IEEE IDICAIHEI*, 2025. DOI: 10.1109/idicaihei65991.2025.11377635.
+
+[3] M. O. Gani, R. K. Ayyasamy, S. M. Alhashmi, A. Sangodiah, and Y. T. Fui, "ETFPOS-IDF: A Novel Term Weighting Scheme for Examination Question Classification Based on Bloom's Taxonomy," *IEEE Access*, vol. 10, pp. 132777–132785, 2022. DOI: 10.1109/ACCESS.2022.3230592.
+
+[4] M. Mahboob, "Misclassification Analysis in Automated Bloom's Taxonomy Classifiers: A Data-Centric Perspective on Educational Software," *ICCK J. Softw. Eng.*, vol. 2, no. 2, pp. 138–155, 2026. DOI: 10.62762/JSE.2026.118512.
+
+[5] A. Waheed, M. Goyal, N. Mittal, D. Gupta, A. Khanna, and M. Sharma, "BloomNet: A Robust Transformer based Model for Bloom's Learning Outcome Classification," in *Proc. ICNLSP*, Trento, Italy, 2021, pp. 209–218. [Online]. Available: https://aclanthology.org/2021.icnlsp-1.24/.
+
+[6] A. Maharramov, "Automatic Classification of Questions According to Bloom Taxonomy," M.S. thesis, NOVA Univ. Lisbon, 2025. URI: http://hdl.handle.net/10362/190079.
+
+[7] A. Yaacoub, Z. Assaghir, A. Kar, and J. Da-Rugna, "From Generation to Certification: A Framework for Explainable and Taxonomy-Aware AI in Educational Assessment," in *Proc. CSEDU*, 2026.
+
+[8] M. M. Hamid et al., "Enhancing Educational Assessment through Automated Question Classification Using a RoBERTa-Based Ensemble Model," *Sci. Rep.*, 2026. DOI: 10.1038/s41598-026-45486-1.
+
+### Answer Leakage & Integrity
+[9] J. Zhao, M. Knežević, and T. Käser, "Evaluating Answer Leakage Robustness of LLM Tutors against Adversarial Student Attacks," in *Proc. ACL*, 2026, pp. 30588–30617. DOI: 10.18653/v1/2026.acl-long.1412.
+
+[10] Q. Chang et al., "PEARL: Training Socratic Tutors with Pedagogically Aligned Reinforcement Learning," arXiv:2605.29582, 2026.
+
+[11] S. M. A. Hossain, R. K. Shayoni, M. F. Mridha, and J. Shin, "EduGuard: A Safe RAG-Based LLM Tutor for Programming Education," arXiv:2607.15738, 2026.
+
+[12] S. Zhao, K. Yu, Y. Yuan, P. He, and H. Wen, "SHAPE: Unifying Safety, Helpfulness and Pedagogy for Educational LLMs," in *Proc. ACL*, 2026, pp. 11537–11553. DOI: 10.18653/v1/2026.acl-long.529.
+
+[13] J. Shao, Q. Wu, H. Zhang, S. Sun, and J. Zhuang, "Mitigating Scaffolding Collapse in Socratic Tutors via Representation Alignment," arXiv:2607.19371, 2026.
+
+[14] B. Shen, D. Shang, Y. Wang, and T. Ning, "Detecting Answer-Driven Reasoning in LLM-Based Educational Tutors via Truncated Chain-of-Thought Auditing," arXiv:2607.04572, 2026.
+
+[15] Z. Li, Q. Zhu, M. Wang, J. Li, and H. Huang, "Planning-Guided Tutoring with Assessment-Driven Memory for Pedagogical LLM Tutors," in *Proc. ACL*, 2026, pp. 7165–7188. DOI: 10.18653/v1/2026.acl-long.325.
+
+[16] D. Dinucu-Jianu, J. Macina, N. Daheim, I. Hakimi, I. Gurevych, and M. Sachan, "From Problem-Solving to Teaching Problem-Solving: Aligning LLMs with Pedagogy using Reinforcement Learning," in *Proc. EMNLP*, 2025, pp. 272–292. DOI: 10.18653/v1/2025.emnlp-main.15.
+
+[17] R. Hazra et al., "SafeTutors: Benchmarking Pedagogical Safety in AI Tutoring Systems," arXiv:2603.17373, 2026.
+
+### Equity & Fairness
+[18] A. Gupta, N. Patil, S. Ghosh, and S. S. Gaikwad, "Compounding Disadvantage: Auditing Intersectional Bias in LLM-Generated Explanations Across Indian and American STEM Education," in *Proc. ACM FAccT*, 2026. DOI: 10.1145/3805689.3812394.
+
+[19] J. K. Sloan-Lynch and R. Morse, "Equity-Forward Learning Analytics: Designing a Dashboard to Support Marginalized Student Success," in *Proc. LAK*, Kyoto, Japan, 2024. DOI: 10.1145/3636555.3636844.
+
+[20] Q. Xu, "FairTutor: Equity-Aware Pedagogical LLM Routing for Budget-Constrained AI Tutoring," in *AI4EDU @ KDD*, Jeju, Korea, 2026.
+
+[21] M. Tan, L. Phalen, and D. Demszky, "Marked Pedagogies: Examining Linguistic Biases in Personalized Automated Writing Feedback," in *Proc. LAK*, 2026. DOI: 10.1145/3785022.3785113.
+
+[22] A. Vinodh et al., "Evaluating an AI Tutor for Bias Across Different Foundation Models," in *Proc. AIED*, 2025. DOI: 10.1007/978-3-031-98465-5_4.
+
+### Knowledge Tracing & Forgetting
+[23] W. Cheng et al., "Uncertainty-aware Knowledge Tracing," in *Proc. AAAI*, vol. 39, no. 27, pp. 27905–27913, 2025. DOI: 10.1609/aaai.v39i27.35007.
+
+[24] S. Wang et al., "Personalized Forgetting Mechanism with Concept-Driven Knowledge Tracing," *ACM*, 2026. DOI: 10.1145/3810940.
+
+[25] Y. Bai, X. Li, Z. Liu, Y. Huang, M. Tian, and W. Luo, "Rethinking and Improving Student Learning and Forgetting Processes for Attention based Knowledge Tracing Models," in *Proc. AAAI*, vol. 39, no. 27, pp. 27822–27830, 2025. DOI: 10.1609/aaai.v39i27.34998.
+
+[26] M. Lin, K. Deng, Z. Wu, Z. Zheng, and J. Li, "MemoryKT: An Integrative Memory-and-Forgetting Method for Knowledge Tracing," arXiv:2508.08122, 2025.
+
+[27] J. Ye, J. Su, and Y. Cao, "A Stochastic Shortest Path Algorithm for Optimizing Spaced Repetition Scheduling," in *Proc. KDD*, 2022, pp. 4381–4390. DOI: 10.1145/3534678.3539081.
+
+[28] J. Ye, J. Su, S. Nie, Y. Cao, and Y. Chen, "Optimizing Spaced Repetition Schedule by Capturing the Dynamics of Memory," *IEEE Trans. Knowl. Data Eng.*, vol. 35, no. 10, pp. 10085–10097, 2023. DOI: 10.1109/TKDE.2023.3251721.
+
+### Query Decomposition
+[29] P. J. L. Ammann, J. Golde, and A. Akbik, "Question Decomposition for Retrieval-Augmented Generation," in *Proc. ACL Student Research Workshop*, Vienna, Austria, 2025, pp. 497–507. DOI: 10.18653/v1/2025.acl-srw.32.
+
+[30] R. Petcu et al., "Query Decomposition for RAG: Balancing Exploration-Exploitation," in *Proc. EACL*, Rabat, Morocco, 2026, pp. 6857–6871. DOI: 10.18653/v1/2026.eacl-long.322.
+
+[31] X. Chen et al., "ToR-Lite: A Lightweight Semantic Query Decomposition for Multi-Hop Retrieval-Augmented Generation in Cloud-Based AI Systems," *Applied Sciences*, vol. 16, no. 8, art. 3966, 2026. DOI: 10.3390/app16083966.
+
+[32] G. I. Kim, J. W. Kim, and B. Jang, "UniRAG: A Unified RAG Framework for Knowledge-Intensive Queries with Decomposition, Break-Down Reasoning, and Iterative Rewriting," in *Proc. EMNLP Findings*, 2025.
+
+[33] Y. Wang et al., "Faithful in Steps: Improving Generalization and Citation in RAG via Query Decomposition," in *Proc. AAAI*, Singapore, 2026, pp. 35671–35679.
+
+[34] S. Shaikh et al., "Dissecting Agentic RAG: A Component Ablation for Multi-Hop QA with a Local 7B Model," arXiv:2606.21553, 2026.
+
+### Multi-Agent & Dialogue
+[35] Y. Li et al., "KELE: A Consultant-Teacher Dual-Agent Framework for Knowledge-Enhanced Learning," in *Proc. EMNLP*, 2025.
+
+[36] A. Kumar et al., "IntelliCode: Multi-Agent LLM Framework for Interactive Code Generation and Tutoring," in *Proc. EACL*, 2026.
+
+[37] S. Das et al., "BIPED: A Framework for Dialogue Act Prediction in Pedagogical Conversations," in *Proc. ACL*, 2024.
+
+[38] Z. Wang, Z. Lu, C. Zeng, S. Dong, M. Zuo, and J. Sun, "MMKT: Multimodal Knowledge Tracing in Personalized E-Learning Systems," *IEEE Trans. Comput. Soc. Syst.*, vol. 12, no. 6, pp. 5179–5198, 2025. DOI: 10.1109/TCSS.2025.3574663.
+
+[39] A. Rumble et al., "LEA: A Tri-Modal Agent Framework for Classroom Deployment of AI Tutors," arXiv:2607.13370, 2026.
+
+[40] W. Han et al., "Contrastive Cross-Course Knowledge Tracing via Concept Graph Guided Knowledge Transfer," in *Proc. IJCAI*, 2025, pp. 7401–7409. DOI: 10.24963/ijcai.2025/823.
+
+[41] M. Deng et al., "ACKT: Adversarial Cross-Domain Knowledge Tracing for Cold-Start Scenarios," in *Proc. WWW*, 2026.
+
+[42] A. Alrabah et al., "InstructKG: A 5-Stage Pipeline for Automatic Knowledge Graph Construction from Lecture PDFs," GitHub, 2025. [Online]. Available: https://github.com/aalrabah/instructkg.
+
+[43] R. Alatrash et al., "CourseMapper: Unsupervised Multi-Criteria Prerequisite Inference from PDF Documents," arXiv:2509.05393, 2025.
+
+[44] A. Scarlatos et al., "LLMKT: Fine-Tuning Large Language Models for Knowledge Tracing from Dialogue," in *Proc. LAK*, 2025.
+
+[45] Z. Jia et al., "DiaCDM: Cognitive Diagnosis in Teacher-Student Dialogues Using IRE Framework and AMR Graphs," in *Proc. ACL*, 2025.
+
+### Assessment & Generation
+[46] I. Amanlou et al., "KNIGHT: A Reusable Knowledge Graph for Difficulty-Controlled MCQ Generation," in *Proc. AAAI*, 2026.
+
+[47] R. Zhang et al., "KAQG: Knowledge-Enhanced Automatic Question Generation with Difficulty Control," in *Proc. EMNLP*, 2025.
+
+[48] Z. Wang et al., "CLAF: Adaptive Explanation Generation via Hierarchical Knowledge Graph Retrieval and Preference Learning," in *Proc. EMNLP*, 2025.
+
+[49] A. Robrecht et al., "SNAPE-PM: Bayesian Partner Modeling for Adaptive Tutoring," in *Proc. AIED*, 2025.
+
+[50] X. Liu et al., "MetaCLASS: Metacognitive Tutoring with 11 Interpretable Coach Moves," in *Proc. AAAI*, 2026.
+
+[51] Z. Chen et al., "MC-CPO: Mastery-Conditioned Constrained Policy Optimization for Safe Tutoring," in *Proc. AAAI*, 2026.
+
+[52] Y. Huang et al., "MWO: Multi-Objective Curriculum Sequencing via Memetic Optimization," in *Proc. EDM*, 2025.
+
+[53] Y. Zhang et al., "GapProbe: Counterfactual Question Generation for Knowledge Gap Detection," in *Proc. AAAI*, 2026.
+
+[54] M. Fateen et al., "RAG-Based Automated Short-Answer Scoring with Citation-Backed Feedback," in *Proc. BEA Workshop @ ACL*, 2024.
+
+### Evaluation & Quality
+[55] S. Maurya et al., "MRBench: A Multi-Dimension Evaluation Benchmark for Math Reasoning in AI Tutors," in *Proc. ACL*, 2025.
+
+[56] BEA 2025 Shared Task, "Evaluating Pedagogical Quality in AI-Generated Tutoring Responses," in *Proc. BEA Workshop @ ACL*, 2025.
+
+[57] J. Lee et al., "QuizWeaver: Deterministic Bloom's and Webb's DOK Alignment for Automated Assessment Generation," GitHub, 2026.
+
+[58] R. Singh et al., "Curriculum Cartographer: LLM-Based Mapping of Artifacts to Learning Outcomes with Bloom's Classification," in *Proc. CSEDU*, 2026.
+
+[59] Y. Liu et al., "MSCL: Self-Supervised Graph Contrastive Learning for Knowledge Tracing," in *Proc. AAAI*, 2026.
+
+[60] Z. Wang et al., "Coral: Collaborative Cognitive Diagnosis with Disentangled Representation Learning," in *Proc. EDM*, 2024.
+
+[61] T. Kim et al., "MiRAGE: Retrieval-Guided Multi-Stage Reasoning for Misconception Detection," in *Proc. ACL*, 2025.
+
+[62] Y. Chen et al., "Cognitive-Uncertainty Guided Knowledge Distillation for Misconception Detection," in *Proc. ACL*, 2026.
+
+[63] L. Zhang et al., "MHPO: Multi-Horizon Preference Optimization for Pedagogical Strategy Selection," in *Proc. ACL*, 2026.
+
+[64] A. Hazra et al., "EduGuardBench: A Benchmark for Evaluating Pedagogical Fidelity and Safety in AI Tutors," in *Proc. AAAI*, 2026.
+
+[65] S. Yang et al., "EDF: An Evidence-Decision-Feedback Framework for Dialogue Act Scaffolding in AI Tutoring," in *Proc. AAAI*, 2026.
+
+[66]
+
+[67]
+
+[68]
+
+[69] S. Choudhary et al., "RE-DACT: A Differential Privacy and Redaction Framework for Structured and Unstructured Data," in *Proc. USENIX Security*, 2025.

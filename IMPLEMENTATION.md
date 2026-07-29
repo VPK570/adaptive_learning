@@ -1,6 +1,6 @@
 # Adaptive Learning Platform — Full Implementation Reference
 
-> **Generated:** 2026-07-26  
+> **Generated:** 2026-07-28  
 > **MVP Readiness:** 3/10 — functional core, significant technical debt.  
 > **Stack:** FastAPI + SurrealDB + Next.js 16 + Gemini/OpenRouter LLM
 
@@ -40,24 +40,25 @@
    - 4.26 [Deep KT (deep_kt.py)](#426-deep-kt-deep_ktpy)
    - 4.27 [Chat History (chat_history.py)](#427-chat-history-chat_historypy)
    - 4.28 [Courses (courses.py)](#428-courses-coursespy)
-   - 4.29 [Celery Tasks (tasks.py)](#429-celery-tasks-taskspy)
-   - 4.30 [Dependencies (deps.py)](#430-dependencies-depspy)
-   - 4.31 [Logging Middleware (logging_middleware.py)](#431-logging-middleware-logging_middlewarepy)
-   - 4.32 [Schemas (schemas.py)](#432-schemas-schemaspy)
-   - 4.33 [Router: auth.py](#433-router-authpy)
-   - 4.34 [Router: query.py](#434-router-querypy)
-   - 4.35 [Router: courses.py](#435-router-coursespy)
-   - 4.36 [Router: ingestion.py](#436-router-ingestionpy)
-   - 4.37 [Router: chat.py](#437-router-chatpy)
-   - 4.38 [Router: flashcards.py](#438-router-flashcardspy)
-   - 4.39 [Router: quiz.py](#439-router-quizpy)
-   - 4.40 [Router: analytics.py](#440-router-analyticspy)
-   - 4.41 [Router: paper.py](#441-router-paperpy)
-   - 4.42 [Router: images.py](#442-router-imagespy)
-   - 4.43 [Router: admin.py](#443-router-adminpy)
-   - 4.44 [Router: users.py](#444-router-userspy)
-   - 4.45 [Router: learning_path.py](#445-router-learning_pathpy)
-   - 4.46 [Router: tasks.py](#446-router-taskspy)
+    - 4.29 [Celery Tasks (tasks.py)](#429-celery-tasks-taskspy)
+    - 4.30 [Redis Client (redis_client.py)](#430-redis-client-redis_clientpy)
+    - 4.31 [Dependencies (deps.py)](#431-dependencies-depspy)
+    - 4.32 [Logging Middleware (logging_middleware.py)](#432-logging-middleware-logging_middlewarepy)
+    - 4.33 [Schemas (schemas.py)](#433-schemas-schemaspy)
+    - 4.34 [Router: auth.py](#434-router-authpy)
+    - 4.35 [Router: query.py](#435-router-querypy)
+    - 4.36 [Router: courses.py](#436-router-coursespy)
+    - 4.37 [Router: ingestion.py](#437-router-ingestionpy)
+    - 4.38 [Router: chat.py](#438-router-chatpy)
+    - 4.39 [Router: flashcards.py](#439-router-flashcardspy)
+    - 4.40 [Router: quiz.py](#440-router-quizpy)
+    - 4.41 [Router: analytics.py](#441-router-analyticspy)
+    - 4.42 [Router: paper.py](#442-router-paperpy)
+    - 4.43 [Router: images.py](#443-router-imagespy)
+    - 4.44 [Router: admin.py](#444-router-adminpy)
+    - 4.45 [Router: users.py](#445-router-userspy)
+    - 4.46 [Router: learning_path.py](#446-router-learning_pathpy)
+    - 4.47 [Router: tasks.py](#447-router-taskspy)
 5. [Database Schema](#5-database-schema)
 6. [Frontend Implementation](#6-frontend-implementation)
    - 6.1 [Package Dependencies](#61-package-dependencies)
@@ -110,7 +111,7 @@ The **Adaptive Learning Platform** is a multimodal RAG (Retrieval-Augmented Gene
 - **Database:** SurrealDB (document DB with HNSW vector indexes), file-persisted via Docker
 - **Queue:** Redis + Celery for background ingestion
 - **Frontend:** Next.js 16 App Router, plain CSS, no Tailwind
-- **API Proxy:** Next.js rewrites (26 rules) — no CORS between frontend and backend
+- **API Proxy:** Next.js rewrites (28 rules) — no CORS between frontend and backend
 
 ---
 
@@ -123,9 +124,9 @@ The **Adaptive Learning Platform** is a multimodal RAG (Retrieval-Augmented Gene
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │  /login  /register  /student/*  /faculty/*  /admin/*               │  │
 │  │  AppShell → Sidebar + TopBar + Content                             │  │
-│  │  SSE streaming for AI chat                                         │  │
+│  │  SSE streaming for AI chat (direct + Celery async)                   │  │
 │  └──────────────────────┬─────────────────────────────────────────────┘  │
-│                          │ 26 Next.js rewrites (no CORS)                 │
+│                          │ 28 Next.js rewrites (no CORS)                 │
 │                          ▼                                                │
 │  ┌──────────────────────────────────────────────────────────────────────┐│
 │  │                      BACKEND (:8001)                                 ││
@@ -173,18 +174,115 @@ surrealdb ──→ worker
 
 ### Data Flow (Query Request)
 
+**Direct SSE path:**
 ```
-User → Frontend → Next.js Rewrite → Backend /query or /query-stream
+User → Frontend → Next.js Rewrite → Backend /query-stream
   → Gatekeeper (LLM relevance check)
   → Query Enhancer (LLM generates 3 search queries)
   → RAGPipeline.retrieve (embed query → HNSW vector search + BM25 → RRF fusion)
   → build_tutor_prompt (system prompt + context window + history + query)
-  → LLM chat completion (Gemini, streaming or non-streaming)
+  → LLM chat completion (Gemini, streaming)
   → Verifier (LLM checks grounding in retrieved chunks)
   → Citation extraction (regex match to source chunks)
-  → Log query to query_log table
-  → Response to frontend
+  → Persist query_log + chat_history
+  → SSE response to frontend
 ```
+
+**Async Celery path (decouples LLM from HTTP lifecycle):**
+```
+User → Frontend → POST /query-async (FastAPI)
+  → Celery task process_query_task.delay()
+  → Celery runs full pipeline (gatekeeper → enhancer → retrieve → LLM → verifier → extract)
+  → Each SSE chunk RPUSHed to Redis list query_progress:{task_id}
+  → Frontend GET /query-stream/{task_id} polls Redis via LRANGE
+  → SSE terminates on {"type": "done"} or {"type": "error"}
+  → Celery persists query_log + chat_history on completion
+  → Redis key auto-expires after 600s
+```
+
+> **LaTeX TikZ — System Architecture Diagram:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1.5cm and 2.5cm,
+>   box/.style={rectangle, draw, rounded corners, minimum width=3cm, minimum height=1.2cm, align=center, font=\sffamily},
+>   db/.style={cylinder, draw, shape border rotate=90, minimum width=2.5cm, minimum height=1.5cm, aspect=0.3, align=center, font=\sffamily},
+>   worker/.style={box, fill=yellow!10},
+>   service/.style={box, fill=blue!10},
+>   front/.style={box, fill=green!10},
+>   ext/.style={box, fill=red!10, dashed},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,6.5) {Adaptive Learning Platform --- System Architecture};
+> \node[ext] (gemini) at (-6,4.5) {Google Gemini\\Chat Completions};
+> \node[ext] (openrouter) at (-6,2) {OpenRouter\\Embeddings};
+> \node[db] (surrealdb) at (-1.5,-1) {SurrealDB\\:8000};
+> \node[service] (redis) at (3,-1) {Redis\\:6379};
+> \node[service] (backend) at (-1.5,1.5) {Backend\\FastAPI :8001};
+> \node[worker] (worker) at (3,1.5) {Worker\\Celery};
+> \node[front] (frontend) at (-1.5,4.5) {Frontend\\Next.js :3000};
+> \draw[arrow] (frontend) -- node[right,font=\small\sffamily] {28 rewrites} (backend);
+> \draw[arrow] (backend) -- node[left,font=\small\sffamily] {WS RPC} (surrealdb);
+> \draw[arrow] (backend) -- node[above,font=\small\sffamily] {Redis} (redis);
+> \draw[arrow] (worker) -- (redis);
+> \draw[arrow,dashed] (worker) -- node[below left,font=\small\sffamily] {SurrealQL} (surrealdb);
+> \draw[arrow] (backend) -- (gemini);
+> \draw[arrow] (backend) -- (openrouter);
+> \draw[arrow] (worker) -- (gemini);
+> \draw[arrow] (worker) -- (openrouter);
+> \begin{scope}[on background layer]
+> \node[rectangle, draw, dotted, rounded corners, fill=gray!3, fit={(surrealdb)(redis)(backend)(worker)}, label={[font=\small\sffamily]above:Docker (5 services)}] {};
+> \end{scope}
+> \end{tikzpicture}
+> \end{document}
+> ```
+
+> **LaTeX TikZ — Async Query Flow (Sequence Diagram):**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   actor/.style={rectangle, draw, minimum width=2.2cm, minimum height=0.8cm, align=center, font=\small\bfseries\sffamily},
+>   arrow/.style={-{Latex[length=2mm]}, thick},
+>   msg/.style={font=\footnotesize\sffamily, align=center, fill=white, inner sep=2pt}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,7.5) {Async Query --- 3-Tier Pipeline};
+> \node[actor] (browser) at (-5,5.5) {Browser};
+> \node[actor] (nextjs) at (-2,5.5) {Next.js};
+> \node[actor] (fastapi) at (1,5.5) {FastAPI};
+> \node[actor] (celery) at (4,5.5) {Celery};
+> \node[actor] (redis) at (7,5.5) {Redis};
+> \node[actor] (gemini) at (10,5.5) {Gemini};
+> \foreach \x/\name in {-5/browser,-2/nextjs,1/fastapi,4/celery,7/redis,10/gemini} {
+>   \draw[thick] (\x,5) -- (\x,-1);
+> }
+> \draw[arrow] (-5,4.5) -- node[above,msg] {POST /query-async} (-2,4.5);
+> \draw[arrow] (-2,4.2) -- node[above,msg] {proxy} (1,4.2);
+> \draw[arrow] (1,3.9) -- node[above,msg] {process\_query\_task.delay()} (4,3.9);
+> \draw[arrow] (4,3.6) -- node[above,msg] {task\_id} (1,3.6);
+> \draw[arrow] (1,3.3) -- node[above,msg] {task\_id} (-2,3.3);
+> \draw[arrow] (-2,3.0) -- node[above,msg] {task\_id} (-5,3.0);
+> \draw[arrow] (-5,2.2) -- node[above,msg] {GET /query-stream/\{task\_id\}} (-2,2.2);
+> \draw[arrow] (-2,1.9) -- node[above,msg] {proxy} (1,1.9);
+> \draw[arrow] (1,1.6) -- node[above,msg] {LRANGE} (7,1.6);
+> \draw[arrow] (7,1.3) -- node[above,msg] {SSE chunks} (1,1.3);
+> \draw[arrow] (1,1.0) -- node[above,msg] {data: \{...\}} (-2,1.0);
+> \draw[arrow] (-2,0.7) -- node[above,msg] {SSE stream} (-5,0.7);
+> \draw[arrow] (4,3.9) -- node[above,msg] {query\_stream()} (10,3.9);
+> \draw[arrow] (10,3.6) -- node[above,msg] {SSE chunks} (4,3.6);
+> \draw[arrow] (4,3.3) -- node[above,msg] {RPUSH} (7,3.3);
+> \draw[arrow] (4,0) -- node[above,msg] {RPUSH done + EXPIRE 600s} (7,0);
+> \draw[arrow] (7,-0.3) -- node[above,msg] {type:done} (1,-0.3);
+> \draw[arrow] (1,-0.6) -- (2,-0.6);
+> \node at (3.5,-0.6) [font=\footnotesize\sffamily] {Connection closes};
+> \end{tikzpicture}
+> \end{document}
+> ```
 
 ---
 
@@ -208,7 +306,7 @@ dont touch/
 │   ├── .env                      # Backend-specific env vars
 │   ├── .dockerignore
 │   ├── Dockerfile                # Python 3.11-slim multi-stage
-│   ├── requirements.txt          # 19 Python dependencies
+│   ├── requirements.txt          # 20 Python dependencies
 │   ├── ruff.toml                 # Ruff config (line-length=120, py311)
 │   ├── server.py                 # FastAPI entrypoint
 │   ├── lect1.md                  # Sample lecture notes (BACSE101)
@@ -232,6 +330,7 @@ dont touch/
 │       ├── db.py                 # SurrealDBManager singleton
 │       ├── auth.py               # JWT + bcrypt + RBAC
 │       ├── rag.py                # RAGPipeline (ingest, retrieve, stats)
+│       ├── redis_client.py       # Redis singleton for Celery streaming
 │       ├── query_engine.py       # QueryEngine (prompt building, streaming)
 │       ├── provider_router.py    # Multi-key LLM router (Gemini + OpenRouter)
 │       ├── openrouter.py         # Legacy OpenRouter-only client
@@ -799,11 +898,50 @@ Deduplicated list of all course_codes across text_chunk and image_chunk.
 
 SHA-256 via 4KB blocks — used for document deduplication.
 
+> **LaTeX TikZ — Hybrid Search / RRF Fusion:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1.2cm and 2cm,
+>   box/.style={rectangle, draw, rounded corners, minimum width=2.8cm, minimum height=0.9cm, align=center, font=\small\sffamily},
+>   proc/.style={box, fill=blue!10},
+>   data/.style={box, fill=green!10},
+>   result/.style={box, fill=orange!10},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,6) {Hybrid Search --- BM25 + HNSW + RRF};
+> \node[data] (query) at (0,4.5) {Student Query};
+> \node[proc] (embed) at (-4,3) {Embed Query\\OpenRouter};
+> \node[proc] (bm25) at (4,3) {BM25 Fulltext\\SurrealDB};
+> \node[proc] (vtext) at (-6,1.5) {HNSW Search\\text\_chunk};
+> \node[proc] (vcurr) at (-2,1.5) {HNSW Search\\curriculum\_chunk};
+> \node[data] (vec) at (-4,0) {Vector results};
+> \node[data] (bm) at (4,0) {BM25 results};
+> \node[result] (rrf) at (0,-1.5) {RRF Fusion};
+> \node[result] (final) at (0,-3.5) {Top-K Results};
+> \draw[arrow] (query) -- (embed);
+> \draw[arrow] (query) -- (bm25);
+> \draw[arrow] (embed) -- (vtext);
+> \draw[arrow] (embed) -- (vcurr);
+> \draw[arrow] (vtext) -- (vec);
+> \draw[arrow] (vcurr) -- (vec);
+> \draw[arrow] (bm25) -- (bm);
+> \draw[arrow] (vec) -- (rrf);
+> \draw[arrow] (bm) -- (rrf);
+> \draw[arrow] (rrf) -- (final);
+> \node[font=\small\ttfamily, fill=gray!5, rounded corners] at (5,-1.5) {RRF = $\sum 1/(60+rank)$};
+> \end{tikzpicture}
+> \end{document}
+> ```
+
 ---
 
 ### 4.6 Query Engine (query_engine.py)
 
-**File:** `backend/app/query_engine.py` (427 lines)
+**File:** `backend/app/query_engine.py` (430 lines)
 
 Builds prompts, orchestrates retrieval + LLM calls, enforces citations.
 
@@ -811,19 +949,9 @@ Builds prompts, orchestrates retrieval + LLM calls, enforces citations.
 
 **`build_tutor_system_prompt(course_name, course_code, language, mastery, bloom_level)` (lines 58-102):**
 
-Produces a system prompt with:
-- Identity: "expert {course_name} tutor for VIT students"
-- Mastery adaptation section (optional):
-  - ≥0.70: "strong mastery — deeper questions, synthesis/evaluation"
-  - ≥0.50: "moderate mastery — scaffolded questions"
-  - ≥0.30: "struggling — simpler diagnostic questions"
-  - <0.30: "low mastery — revisit prerequisites"
-- Bloom's taxonomy level section (optional):
-  - 1=Remember, 2=Understand, 3=Apply, 4=Analyze, 5=Evaluate, 6=Create
-- Rules: inline citations, valid citations list only, safety constraints
-
-**`build_context_window(chunks, history, max_turns)` (lines 105-154):**
-1. Separates text and image chunks
+**`build_context_window(chunks, history, max_turns)` (lines 105-157):**
+1. **Empty-chunks guard (line 110-111):** If no chunks retrieved, returns `"NOTE: No relevant course materials were found for this question. Answer using general knowledge — no citations required."`
+2. Separates text and image chunks
 2. Formats text chunks as `<Text N: Title, Slide N>` blocks
 3. Formats image chunks as `<Image N: Title, Slide N>` blocks
 4. Builds "VALID CITATIONS LIST" from all chunks
@@ -875,6 +1003,41 @@ Matches `[Source: title, Slide/Page N]` citations in response back to retrieved 
 
 **`_normalize_cited_sources(sources)` (lines 21-30):**
 Standardizes citation dict format.
+
+> **LaTeX TikZ — RAG Pipeline Flow:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1.2cm and 2cm,
+>   step/.style={rectangle, draw, rounded corners, minimum width=3cm, minimum height=0.9cm, align=center, font=\small\sffamily},
+>   llm/.style={step, fill=orange!15},
+>   rag/.style={step, fill=blue!10},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,8.5) {RAG Pipeline --- Full Query Flow};
+> \node[step] (s1) at (0,7) {1. Gatekeeper\\Relevance Check};
+> \node[step] (s2) at (0,5.5) {2. Query Enhancer\\3 search queries};
+> \node[rag] (s3) at (0,4) {3. Hybrid Retrieval\\BM25 + HNSW + RRF};
+> \node[step] (s4) at (0,2.5) {4. Build Context Window\\Chunks + History};
+> \node[llm] (s5) at (0,1) {5. Strategy Generation\\LLM call};
+> \node[llm] (s6) at (0,-0.5) {6. Streaming Answer\\LLM call};
+> \node[step] (s7) at (0,-2) {7. Verifier\\Grounding check};
+> \node[step] (s8) at (0,-3.5) {8. Citation Extraction\\Regex match};
+> \node[step] (s9) at (0,-5) {9. Persist Results\\query\_log + chat\_history};
+> \draw[arrow] (s1) -- (s2);
+> \draw[arrow] (s2) -- (s3);
+> \draw[arrow] (s3) -- (s4);
+> \draw[arrow] (s4) -- (s5);
+> \draw[arrow] (s5) -- (s6);
+> \draw[arrow] (s6) -- (s7);
+> \draw[arrow] (s7) -- (s8);
+> \draw[arrow] (s8) -- (s9);
+> \end{tikzpicture}
+> \end{document}
+> ```
 
 ---
 
@@ -928,6 +1091,50 @@ Reads `request.state.user` set by auth middleware. Returns 401 if missing.
 
 **`require_role(*allowed_roles)` (lines 135-143):**
 Returns a dependency checker that validates `request.state.user.role` is in allowed set. Returns 403 on role mismatch.
+
+> **LaTeX TikZ — Authentication & Authorization Flow:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta,shapes.geometric}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1.2cm and 2.5cm,
+>   box/.style={rectangle, draw, rounded corners, minimum width=2.5cm, minimum height=0.9cm, align=center, font=\small\sffamily},
+>   actor/.style={box, fill=green!10},
+>   server/.style={box, fill=blue!10},
+>   middleware/.style={box, fill=yellow!10},
+>   decision/.style={diamond, draw, aspect=1.5, align=center, font=\small\sffamily, inner sep=3pt},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (1,5) {Authentication \& Authorization Flow};
+> \node[actor] (login) at (-4,3.5) {Login Form};
+> \node[server] (auth) at (-4,1.5) {POST /auth/login};
+> \node[server] (jwt) at (-4,-0.5) {JWT Creation};
+> \node[actor] (store) at (-4,-2.5) {Zustand Store};
+> \draw[arrow] (login) -- node[right,font=\small\sffamily] {form-encoded} (auth);
+> \draw[arrow] (auth) -- node[right,font=\small\sffamily] {bcrypt} (jwt);
+> \draw[arrow] (jwt) -- node[right,font=\small\sffamily] {token+role} (store);
+> \node[box] (req) at (2.5,3.5) {Any Request};
+> \node[middleware] (mw) at (2.5,2) {auth\_middleware};
+> \node[decision] (valid) at (2.5,0) {JWT valid?};
+> \node[box] (pub) at (-1,0) {Public?};
+> \node[box] (route) at (2.5,-2) {Route handler};
+> \draw[arrow] (req) -- (mw);
+> \draw[arrow] (mw) -- (valid);
+> \draw[arrow] (valid) -- node[right,font=\small\sffamily] {Yes} (route);
+> \draw[arrow] (valid) -- node[above,font=\small\sffamily] {No} (pub);
+> \draw[arrow] (pub) -- node[above,font=\small\sffamily] {No} (-1,-0.5);
+> \node at (-1,-0.8) [font=\small\sffamily] {401};
+> \node[decision] (role) at (6,2) {Role?};
+> \node[box] (rroute) at (6,-0.5) {Handler};
+> \node[box] (redir) at (9,2) {Redirect};
+> \draw[arrow] (route) -- (role);
+> \draw[arrow] (role) -- node[right,font=\small\sffamily] {OK} (rroute);
+> \draw[arrow] (role) -- node[above,font=\small\sffamily] {Wrong} (redir);
+> \end{tikzpicture}
+> \end{document}
+> ```
 
 ---
 
@@ -1527,15 +1734,15 @@ Course CRUD operations.
 
 ### 4.29 Celery Tasks (tasks.py)
 
-**File:** `backend/app/tasks.py` (72 lines)
+**File:** `backend/app/tasks.py` (152 lines)
 
-Celery worker configuration and background tasks.
+Celery worker configuration and background tasks. 3 task types.
 
 #### Celery App
 
 ```python
 celery_app = Celery("adaptive_learner")
-_worker_loop = asyncio.new_event_loop()  # single event loop for all async tasks
+_worker_loop = asyncio.new_event_loop()  # shared event loop for all async tasks
 ```
 
 Config:
@@ -1547,15 +1754,36 @@ Config:
 
 #### Tasks
 
-**`ingest_pdf_task(course_code, document_title, filepath, topic, metadata)` (lines 42-56):**
+**`ingest_pdf_task(course_code, document_title, filepath, topic, metadata)` (lines 43-57):**
 1. Creates `RAGPipeline()` instance
 2. Runs `rag.ingest_pdf()` in the shared event loop
 3. Cleans up temp file in `finally`
+- `max_retries=3, autoretry_for=(ValueError,)`
 
-**`ingest_curriculum_task(course_code, document_title, filepath, topic)` (lines 59-71):**
+**`ingest_curriculum_task(course_code, document_title, filepath, topic)` (lines 60-73):**
 Same pattern for curriculum ingestion.
+- `max_retries=3, autoretry_for=(ValueError,)`
 
-Both tasks: `max_retries=3, autoretry_for=(ValueError,)`
+**`process_query_task(course_code, session_id, question, user_email, language, mastery, bloom_level, top_k, image_ids, history)` (lines 76-152):**
+
+This is the **async query workhorse** — decouples LLM calls from the HTTP lifecycle.
+
+1. Gets Redis client via `get_redis()` module-level singleton
+2. Defines an inner `async _run()` coroutine that:
+   a. Creates `QueryEngine()` instance
+   b. If `image_ids` provided: loads images from `uploads/chat/` dir, base64-encodes, maps MIME types
+   c. Calls `engine.query_stream()` — runs the full RAG pipeline
+   d. For each SSE chunk (`thinking`/`content`/`metadata`): RPUSHes JSON to `query_progress:{task_id}`
+   e. On completion: creates `query_log` record + persists both user and assistant messages via `add_message()` / `chat_history.py`
+   f. RPUSHes `{"type": "done"}`
+3. On exception: RPUSHes `{"type": "error", "content": str(e)}`
+4. `finally`: sets TTL 600s on the Redis key (auto-cleanup)
+5. Returns `{"status": "done"}` — Celery result (not used by frontend)
+
+Key design decisions:
+- `max_retries=1` — no retry on failure, error is streamed to frontend
+- Request ID propagation via Celery signals (same as other tasks)
+- Frontend recovers in-flight tasks from `sessionStorage` on page refresh
 
 #### Request ID Propagation
 
@@ -1574,9 +1802,66 @@ def restore_request_id(task, **kwargs):
         request_id_var.set(rid)
 ```
 
+> **LaTeX TikZ — Celery Task Architecture:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1.2cm and 2.5cm,
+>   task/.style={rectangle, draw, rounded corners, minimum width=3cm, minimum height=1cm, align=center, font=\small\sffamily},
+>   infra/.style={rectangle, draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small\sffamily, fill=gray!10},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,5) {Celery Task Architecture --- 3 Types};
+> \node[infra] (redis) at (0,3) {Redis broker + backend};
+> \node[task] (ingest) at (-4,0.5) {ingest\_pdf\_task};
+> \node[task] (curr) at (0,0.5) {ingest\_curriculum\_task};
+> \node[task] (query) at (4,0.5) {process\_query\_task};
+> \node[below=of ingest, font=\footnotesize\sffamily, text width=3cm, align=center] {RAGPipeline\\max\_retries=3\\rm temp file};
+> \node[below=of curr, font=\footnotesize\sffamily, text width=3cm, align=center] {CurriculumManager\\max\_retries=3\\topic extraction};
+> \node[below=of query, font=\footnotesize\sffamily, text width=3cm, align=center] {QueryEngine\\max\_retries=1\\RPUSH SSE chunks\\TTL 600s};
+> \draw[arrow] (redis) -- (ingest);
+> \draw[arrow] (redis) -- (curr);
+> \draw[arrow] (redis) -- (query);
+> \end{tikzpicture}
+> \end{document}
+> ```
+
 ---
 
-### 4.30 Dependencies (deps.py)
+### 4.30 Redis Client (redis_client.py)
+
+**File:** `backend/app/redis_client.py` (15 lines)
+
+Minimal Redis singleton for Celery task streaming, used by `process_query_task` and `query_stream/{task_id}` endpoint.
+
+```python
+import os
+import redis as _redis
+
+_client = None
+
+def get_redis():
+    global _client
+    if _client is None:
+        _client = _redis.from_url(
+            os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+        )
+    return _client
+```
+
+Key points:
+- Module-level singleton: `_client = None`, initialized on first call
+- Reads `CELERY_BROKER_URL` env var (same as Celery config) — defaults to `redis://redis:6379/0`
+- `decode_responses=True` — returns strings, not bytes
+- Used in `routers/query.py` (`/query-stream/{task_id}` LRANGE polling) and `tasks.py` (`process_query_task` RPUSH)
+
+---
+
+### 4.31 Dependencies (deps.py)
 
 **File:** `backend/app/deps.py` (21 lines)
 
@@ -1598,7 +1883,7 @@ def get_knowledge_state(request: Request) -> KnowledgeStateManager:
 
 ---
 
-### 4.31 Logging Middleware (logging_middleware.py)
+### 4.32 Logging Middleware (logging_middleware.py)
 
 **File:** `backend/app/logging_middleware.py` (10 lines)
 
@@ -1617,7 +1902,7 @@ Used in `server.py` to inject `request_id` into every log record via custom `Log
 
 ---
 
-### 4.32 Schemas (schemas.py)
+### 4.33 Schemas (schemas.py)
 
 **File:** `backend/app/schemas.py` (98 lines)
 
@@ -1641,7 +1926,7 @@ All string fields constrained by validation constants from `validation.py` (e.g.
 
 ---
 
-### 4.33 Router: auth.py
+### 4.34 Router: auth.py
 
 **File:** `backend/app/routers/auth.py`
 
@@ -1654,30 +1939,53 @@ Login uses `OAuth2PasswordRequestForm` — form-encoded, not JSON. Response: `{a
 
 ---
 
-### 4.34 Router: query.py
+### 4.35 Router: query.py
 
-**File:** `backend/app/routers/query.py`
+**File:** `backend/app/routers/query.py` (283 lines)
+
+The central Q&A router. Has both **direct SSE** and **async Celery** query paths.
+
+#### Helper: `_load_images(image_ids)` (lines 29-44)
+Loads and base64-encodes uploaded images for vision LLM. Path traversal protection: validates resolved path starts with `UPLOAD_DIR`. Supports JPEG/PNG only. Returns list of `{b64, mime}` dicts.
+
+#### Route Table
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| `GET` | `/health` | Public | Health check. Returns `{status, version, dependencies: {surrealdb, openrouter}}`. |
-| `POST` | `/query` | JWT | Non-streaming Q&A. Returns `{response, cited_sources, chunks_retrieved, text_chunks, image_chunks}`. |
-| `POST` | `/query-stream` | JWT | SSE streaming Q&A. Events: `type: thinking/content/metadata`. Supports image_ids for vision. |
-| `POST` | `/chat/feedback` | JWT | Submit helpfulness feedback. Updates knowledge state. Body: `{question, course_code, helpful}`. |
+| `GET` | `/health` | Public | Health check. Returns `{status, version, dependencies: {surrealdb, gemini}}`. |
+| `POST` | `/query-async` | JWT | **Async**: kicks off Celery `process_query_task.delay()`, returns `{task_id}` immediately. |
+| `GET` | `/query-stream/{task_id}` | JWT | **Async poll**: GET SSE from Redis list via LRANGE. Polls every 200ms. Terminates on `done`/`error`. |
+| `POST` | `/query-stream` | JWT | **Direct SSE**: runs full RAG pipeline inline, streams via `StreamingResponse`. Supports image_ids. |
+| `POST` | `/query` | JWT | **Non-streaming**: returns complete response. |
+| `POST` | `/chat/feedback` | JWT | Submit helpfulness feedback. Updates knowledge state via `ks.update_state()`. |
 | `GET` | `/stats` | JWT | Course statistics: document list, chunk counts per course. |
 | `GET` | `/chunks` | JWT | Debug chunk retrieval: raw chunks via hybrid search with scores. |
 
-**Post /query-stream** SSE format:
+#### SSE Formats
+
+**Direct path (POST /query-stream):**
 ```
 data: {"type": "thinking", "content": "I'll explain..."}
 data: {"type": "content", "content": "A modulo-6 counter..."}
 data: {"type": "content", "content": " has 6 states..."}
 data: {"type": "metadata", "verified": true, "cited_sources": [...], "chunks_retrieved": 10, ...}
 ```
+Events: `thinking` (strategy), `content` (streaming tokens), `metadata` (verification + citations).
+On completion: persists `query_log` record + both `user`/`assistant` chat messages.
+
+**Async path (GET /query-stream/{task_id}):**
+Same SSE event types, but streamed via Redis list `query_progress:{task_id}`. Frontend polls via `fetch()` with `ReadableStream` reader. Terminates when `{"type": "done"}` or `{"type": "error"}` is received. TTL 600s on Redis key.
+
+| Detail | Direct SSE | Async Celery |
+|--------|-----------|-------------|
+| Latency perception | Instant (no spinner) | task_id → polling delay |
+| HTTP timeout risk | Yes (long-lived connection) | No (two short requests) |
+| Worker crash recovery | None | Frontend retries from `sessionStorage` |
+| Scalability | Tied to FastAPI workers | Independent Celery workers |
 
 ---
 
-### 4.35 Router: courses.py
+### 4.36 Router: courses.py
 
 **File:** `backend/app/routers/courses.py`
 
@@ -1695,7 +2003,7 @@ data: {"type": "metadata", "verified": true, "cited_sources": [...], "chunks_ret
 
 ---
 
-### 4.36 Router: ingestion.py
+### 4.37 Router: ingestion.py
 
 **File:** `backend/app/routers/ingestion.py`
 
@@ -1708,9 +2016,39 @@ data: {"type": "metadata", "verified": true, "cited_sources": [...], "chunks_ret
 
 Ingestion runs blocking inline (not async background) unless configured for Celery.
 
+> **LaTeX TikZ — Ingestion Pipeline:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1cm and 2cm,
+>   step/.style={rectangle, draw, rounded corners, minimum width=2.8cm, minimum height=0.8cm, align=center, font=\small\sffamily},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,6.5) {PDF Ingestion Pipeline};
+> \node[step] (upload) at (0,5) {Multipart Upload};
+> \node[step, fill=gray!10] (hash) at (0,3.5) {SHA-256 Duplicate Check};
+> \node[step, fill=green!10] (extract) at (0,2) {PyPDF Extraction};
+> \node[step, fill=blue!10] (text) at (-2.5,0) {Text: clean/chunk/embed};
+> \node[step, fill=blue!10] (img) at (2.5,0) {Image: validate/embed};
+> \node[step, fill=orange!10] (record) at (0,-2) {Record in document table};
+> \node[step] (ret) at (0,-3.5) {Return chunk counts};
+> \draw[arrow] (upload) -- (hash);
+> \draw[arrow] (hash) -- node[right,font=\small\sffamily] {new} (extract);
+> \draw[arrow] (extract) -- (text);
+> \draw[arrow] (extract) -- (img);
+> \draw[arrow] (text) -- (record);
+> \draw[arrow] (img) -- (record);
+> \draw[arrow] (record) -- (ret);
+> \end{tikzpicture}
+> \end{document}
+> ```
+
 ---
 
-### 4.37 Router: chat.py
+### 4.38 Router: chat.py
 
 **File:** `backend/app/routers/chat.py`
 
@@ -1722,7 +2060,7 @@ Ingestion runs blocking inline (not async background) unless configured for Cele
 
 ---
 
-### 4.38 Router: flashcards.py
+### 4.39 Router: flashcards.py
 
 **File:** `backend/app/routers/flashcards.py`
 
@@ -1735,7 +2073,7 @@ Ingestion runs blocking inline (not async background) unless configured for Cele
 
 ---
 
-### 4.39 Router: quiz.py
+### 4.40 Router: quiz.py
 
 **File:** `backend/app/routers/quiz.py`
 
@@ -1750,7 +2088,7 @@ Saving a quiz triggers `knowledge_state.update_state()` for each question, which
 
 ---
 
-### 4.40 Router: analytics.py
+### 4.41 Router: analytics.py
 
 **File:** `backend/app/routers/analytics.py`
 
@@ -1765,7 +2103,7 @@ Saving a quiz triggers `knowledge_state.update_state()` for each question, which
 
 ---
 
-### 4.41 Router: paper.py
+### 4.42 Router: paper.py
 
 **File:** `backend/app/routers/paper.py`
 
@@ -1775,7 +2113,7 @@ Saving a quiz triggers `knowledge_state.update_state()` for each question, which
 
 ---
 
-### 4.42 Router: images.py
+### 4.43 Router: images.py
 
 **File:** `backend/app/routers/images.py`
 
@@ -1788,7 +2126,7 @@ Images stored on filesystem at `./chat_images/{session_id}/{filename}`.
 
 ---
 
-### 4.43 Router: admin.py
+### 4.44 Router: admin.py
 
 **File:** `backend/app/routers/admin.py`
 
@@ -1799,7 +2137,7 @@ Images stored on filesystem at `./chat_images/{session_id}/{filename}`.
 
 ---
 
-### 4.44 Router: users.py
+### 4.45 Router: users.py
 
 **File:** `backend/app/routers/users.py`
 
@@ -1810,7 +2148,7 @@ Images stored on filesystem at `./chat_images/{session_id}/{filename}`.
 
 ---
 
-### 4.45 Router: learning_path.py
+### 4.46 Router: learning_path.py
 
 **File:** `backend/app/routers/learning_path.py`
 
@@ -1820,7 +2158,7 @@ Images stored on filesystem at `./chat_images/{session_id}/{filename}`.
 
 ---
 
-### 4.46 Router: tasks.py
+### 4.47 Router: tasks.py
 
 **File:** `backend/app/routers/tasks.py`
 
@@ -1967,6 +2305,47 @@ Images stored on filesystem at `./chat_images/{session_id}/{filename}`.
 | `source` | `string` (quiz/flashcard/feedback) | | `timestamp` | `datetime (DEFAULT time::now())` |
 **Index:** `ql_student_course_idx` (on `student_id, course_code`)
 
+> **LaTeX TikZ — Database Schema (14 tables):**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1.8cm,
+>   tbl/.style={rectangle, draw, rounded corners=2pt, minimum width=5cm, align=left, font=\footnotesize\ttfamily, inner sep=4pt},
+>   tbltitle/.style={tbl, fill=blue!10, font=\small\bfseries\ttfamily}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,9) {Database Schema --- SurrealDB (14 tables)};
+> \node[font=\small\sffamily] at (0,8.2) {Namespace: adaptive\_learning / DB: learning\_platform};
+> \node[tbltitle] (user) at (-6.5,6) {user};
+> \node[tbl, below=0pt of user] {user\_id / email (unique)\\hashed\_password / role\\name / created\_at};
+> \node[tbltitle] (course) at (0,6) {course};
+> \node[tbl, below=0pt of course] {course\_code (unique) / course\_name\\description / icon / created\_at\\Event: cascade delete};
+> \node[tbltitle] (doc) at (6.5,6) {document};
+> \node[tbl, below=0pt of doc] {course\_code / filename\\content\_hash (unique) / doc\_type};
+> \node[tbltitle] (tc) at (-6.5,2.5) {text\_chunk (HNSW+BM25)};
+> \node[tbl, below=0pt of tc] {course\_code / source\_title / page\\text / embedding / content\_type};
+> \node[tbltitle] (ic) at (0,2.5) {image\_chunk (HNSW)};
+> \node[tbl, below=0pt of ic] {course\_code / source\_title / page\\text / embedding / mime\_type};
+> \node[tbltitle] (cc) at (6.5,2.5) {curriculum\_chunk (HNSW)};
+> \node[tbl, below=0pt of cc] {course\_code / source\_title / page\\text / embedding};
+> \node[tbltitle] (ct) at (-6.5,-0.5) {course\_topic};
+> \node[tbl, below=0pt of ct] {course\_code / topic\_name\\subtopics / prerequisites / bloom\_level};
+> \node[tbltitle] (ch) at (0,-0.5) {chat\_message};
+> \node[tbl, below=0pt of ch] {user\_id / course\_code\\session\_id / message\_role / content};
+> \node[tbltitle] (ql) at (6.5,-0.5) {query\_log};
+> \node[tbl, below=0pt of ql] {user\_id / course\_code\\question / cited\_sources / out\_of\_scope};
+> \node[tbltitle] (ks) at (-6.5,-3.5) {knowledge\_state};
+> \node[tbl, below=0pt of ks] {student\_id / course\_code / topic\_id\\bloom\_level / mastery\_score\\confidence / attempts / streak};
+> \node[tbltitle] (qg) at (0,-3.5) {question\_log};
+> \node[tbl, below=0pt of qg] {student\_id / course\_code\\topic\_id / bloom\_level / is\_correct};
+> \node[tbltitle] (tp) at (6.5,-3.5) {topic\_prerequisite};
+> \node[tbl, below=0pt of tp] {course\_code / topic\_from\\topic\_to / prereq\_type};
+> \end{tikzpicture}
+> \end{document}
+> ```
+
 ---
 
 ## 6. Frontend Implementation
@@ -2000,16 +2379,17 @@ const nextConfig = {
   rewrites: async () => [
     { source: '/auth/:path*', destination: `${BACKEND}/auth/:path*` },
     { source: '/query/:path*', destination: `${BACKEND}/query/:path*` },
+    { source: '/query-async', destination: `${BACKEND}/query-async` },
+    { source: '/query-stream/:path*', destination: `${BACKEND}/query-stream/:path*` },
     // ... 24 more rewrite rules ...
     { source: '/stats', destination: `${BACKEND}/stats` },
   ],
 };
-```
 
 **Key decisions:**
 - `output: 'standalone'` — Docker-optimized output
 - `ignoreBuildErrors: true` — TS errors don't block deployment
-- 26 rewrite rules proxy all API calls to backend — no CORS needed since all traffic goes through Next.js
+- 28 rewrite rules proxy all API calls to backend — no CORS needed since all traffic goes through Next.js
 
 ### 6.3 TypeScript Configuration
 
@@ -2085,10 +2465,10 @@ Persistence: zustand `persist` middleware writes to `localStorage('uniauth')`.
 
 | Route | File | Description |
 |-------|------|-------------|
-| `/` | `src/app/page.tsx` | **Login** — role tabs (Student/Faculty/Admin), email/password form, redirects to role dashboard |
+| `/` | `src/app/page.tsx` | **Login** — "Vbook LM / University AI Platform" branding, role tabs (Student/Faculty/Admin), client-side email validation via `validateEmail()`, `?redirect=` param support in both auto-redirect (useEffect) and login flow, password visibility toggle |
 | `/register` | `src/app/register/page.tsx` | **Register** — email, password, role selector |
 | `/student/dashboard` | `src/app/student/dashboard/page.tsx` | Course cards, radial progress, stats tiles |
-| `/student/courses/[code]` | `src/app/student/courses/[code]/page.tsx` | **AI study assistant** — streaming chat (SSE), image upload, Bloom's level selector, source citations, feedback buttons |
+| `/student/courses/[code]` | `src/app/student/courses/[code]/page.tsx` | **AI study assistant** — async Celery-based query flow: `handleSend()` calls `submitQueryAsync()` → Celery task, `attachStream()` polls via `queryStreamTask()` (GET SSE), `resumeActiveTask()` + `useEffect` recovers in-flight queries from `sessionStorage`. `ChatMessage` (React.memo) renders verified/unverified banners, source chips, thinking block (collapsible `<details>`), Copy/Helpful buttons. `cite()` wraps `[Source:...]` in `<cite>` tags, strips other HTML. `react-markdown` with `remark-gfm` + `rehype-raw` (dynamic import, ssr: false). Bloom's level dropdown, image upload preview (max 5), abort controller on unmount, loading skeleton |
 | `/student/quiz` | `src/app/student/quiz/page.tsx` | MCQ quiz with course/topic/Bloom's config, timer, results + save |
 | `/student/flashcards` | `src/app/student/flashcards/page.tsx` | Flashcard generator + flip study session |
 | `/student/progress` | `src/app/student/progress/page.tsx` | Weak topics, study activity, revision suggestions |
@@ -2103,7 +2483,8 @@ Persistence: zustand `persist` middleware writes to `localStorage('uniauth')`.
 
 **Layouts:**
 - `root` (`layout.tsx`) — wraps in `<Providers>` (React Query + Toast), sets Inter + JetBrains Mono fonts
-- `admin/layout.tsx`, `faculty/layout.tsx`, `student/layout.tsx` — auth guards: redirect to `/` on role mismatch
+- `student/layout.tsx` — auth guard with `<Suspense>` wrapper; redirects with `?redirect=` param on role mismatch
+- `admin/layout.tsx`, `faculty/layout.tsx` — auth guards: redirect to `/?redirect=<path>` on unauthenticated access, redirect to correct role dashboard on role mismatch
 
 ### 6.7 Components
 
@@ -2144,13 +2525,59 @@ Persistence: zustand `persist` middleware writes to `localStorage('uniauth')`.
 | `ToastContext` | React context: `showToast(message, type)` — auto-dismiss 3s |
 | `AvatarOrInitials` | Avatar with user initials fallback |
 
+> **LaTeX TikZ — Frontend Component Tree:**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   grow=down, level distance=1.2cm, sibling distance=5cm,
+>   edge from parent/.style={draw, -{Latex[length=1.5mm]}, thick},
+>   node/.style={rectangle, draw, rounded corners, align=center, font=\footnotesize\sffamily, inner sep=3pt},
+>   page/.style={node, fill=green!10, minimum width=2.5cm},
+>   comp/.style={node, fill=blue!5, minimum width=2cm},
+>   layout/.style={node, fill=yellow!10, minimum width=2cm},
+>   store/.style={node, fill=purple!10, minimum width=2cm}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,2) {Frontend Component Tree};
+> \node[page] (root) at (0,0) {Root Layout};
+> \path (root) ++(-1.2,-0.8) node[page] (login) {Login /};
+> \path (root) ++(1.2,-0.8) node[page] (reg) {Register};
+> \path (root) ++(-5.5,-2) node[layout] (sl) {Student Layout};
+> \path (root) ++(0,-2) node[layout] (fl) {Faculty Layout};
+> \path (root) ++(5.5,-2) node[layout] (al) {Admin Layout};
+> \path (sl) ++(-2.5,-1.2) node[page] (sd) {Dashboard};
+> \path (sl) ++(0,-1.2) node[page] (cd) {Course Detail};
+> \path (sl) ++(2.5,-1.2) node[page] (qz) {Quiz};
+> \path (cd) ++(-2,-1.2) node[comp] (cm) {ChatMessage};
+> \path (cd) ++(2,-1.2) node[comp] (rm) {ReactMarkdown};
+> \node[comp] (as) at (-8,-3.5) {AppShell};
+> \path (as) ++(-1.5,-1.2) node[comp] (sb) {Sidebar};
+> \path (as) ++(1.5,-1.2) node[comp] (tb) {TopBar};
+> \node[store] at (8,-3.5) {Zustand Auth Store};
+> \draw[edge from parent] (root) -- (login);
+> \draw[edge from parent] (root) -- (reg);
+> \draw[edge from parent] (root) -- (sl);
+> \draw[edge from parent] (root) -- (fl);
+> \draw[edge from parent] (root) -- (al);
+> \draw[edge from parent] (sl) -- (sd);
+> \draw[edge from parent] (sl) -- (cd);
+> \draw[edge from parent] (sl) -- (qz);
+> \draw[edge from parent] (cd) -- (cm);
+> \draw[edge from parent] (cd) -- (rm);
+> \draw[edge from parent] (sl) -- (as);
+> \end{tikzpicture}
+> \end{document}
+> ```
+
 ### 6.8 API Modules
 
 | File | Functions | Endpoints |
 |------|-----------|-----------|
 | `auth.ts` | `login()`, `register()` | `POST /auth/login`, `POST /auth/register` |
 | `courses.ts` | `list()`, `get()`, `create()`, `update()`, `delete()`, `getStats()`, `getTopics()`, `getCoverage()` | CRUD `/courses`, `/stats`, `/courses/{code}/topics`, `/courses/{code}/coverage` |
-| `chat.ts` | `queryStream()` (SSE), `submitFeedback()`, `getHistory()`, `addMessage()`, `clearHistory()`, `uploadImage()` | `/query-stream`, `/chat/feedback`, `/chat-history`, `/chat-images` |
+| `chat.ts` | `submitQueryAsync()` → Celery task, `queryStreamTask()` (GET SSE polling), `queryStream()` (direct POST SSE), `parseUserMessage()` (JSON content parsing), `feedback()`, `getHistory()`, `addMessage()`, `clearHistory()`, `uploadImage()` | `/query-async`, `/query-stream`, `/query-stream/{taskId}`, `/chat/feedback`, `/chat-history`, `/chat-images` |
 | `quiz.ts` | `generate()`, `save()`, `listSaved()`, `deleteSaved()` | `/quiz`, `/quiz/save`, `/quiz/saved` |
 | `flashcards.ts` | `generate()`, `save()`, `listSaved()`, `deleteSaved()` | `/flashcards`, `/flashcards/save`, `/flashcards/saved` |
 | `paper.ts` | `generate()` | `POST /generate-paper` |
@@ -2160,24 +2587,37 @@ Persistence: zustand `persist` middleware writes to `localStorage('uniauth')`.
 | `users.ts` | `getMe()`, `updateMe()` | `GET /users/me`, `PUT /users/me` |
 | `types.ts` | 30+ TypeScript interfaces | Request/response types for all APIs |
 
-**Streaming SSE Implementation (chat.ts):**
+**Streaming SSE Implementation (chat.ts) — Dual Mode:**
 
+**Async polling (preferred — Celery-based):**
+```typescript
+// Step 1: Kick off Celery task
+const { task_id } = await api.post('/query-async', body);
+
+// Step 2: Poll SSE stream via GET
+const response = await fetch(`/query-stream/${task_id}`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  // Parse SSE data: dispatch to onThinking/onContent/onMetadata/onDone/onError
+}
+```
+
+**Direct POST SSE (legacy):**
 ```typescript
 const response = await fetch('/query-stream', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   body: JSON.stringify(body),
 });
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  const chunk = decoder.decode(value);
-  // Parse SSE data: events, extract thinking/content/metadata types
-}
+// Same ReadableStream reader pattern
 ```
+
+The `queryStreamTask()` function in chat.ts polls the Redis-backed SSE endpoint, parsing each `data:` line into typed events (`thinking`/`content`/`metadata`/`done`/`error`). The `parseUserMessage()` helper handles JSON-encoded user content `{text, images}` from chat history.
 
 ### 6.9 CSS Architecture
 
@@ -2558,6 +2998,45 @@ Upload PDF → POST /ingest (multipart)
 
 **Typical streaming query:** ~5-10s total (3-5 LLM calls)
 
+> **LaTeX TikZ — Query Path Comparison (Direct vs Async):**
+> ```latex
+> \documentclass[tikz,border=10pt]{standalone}
+> \usepackage{tikz}
+> \usetikzlibrary{positioning,arrows.meta}
+> \begin{document}
+> \begin{tikzpicture}[
+>   node distance=1cm and 2cm,
+>   box/.style={rectangle, draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small\sffamily},
+>   arrow/.style={-{Latex[length=2mm]}, thick}
+> ]
+> \node[font=\Large\bfseries\sffamily] at (0,5) {Query Path Comparison --- Direct vs Async};
+> \node[font=\small\bfseries\sffamily] at (-4,4) {Direct SSE (POST /query-stream)};
+> \node[box,fill=green!10] (fb) at (-4,3) {Frontend};
+> \node[box,fill=blue!10] (be) at (-4,1.5) {FastAPI};
+> \node[box,fill=orange!10] (llm) at (-4,0) {Gemini};
+> \node[box,fill=blue!10] (be2) at (-4,-1.5) {FastAPI};
+> \draw[arrow] (fb) -- node[right,font=\small\sffamily] {POST+SSE} (be);
+> \draw[arrow] (be) -- (llm);
+> \draw[arrow] (llm) -- (be2);
+> \draw[arrow] (be2) -- (fb);
+> \node[font=\small\sffamily] at (-4,-3) {Pros: Real-time\\Cons: HTTP timeout, blocking};
+> \node[font=\small\bfseries\sffamily] at (4,4) {Async Celery (POST /query-async)};
+> \node[box,fill=green!10] (fb2) at (4,3) {Frontend};
+> \node[box,fill=blue!10] (be_a) at (4,1.5) {FastAPI};
+> \node[box,fill=yellow!10] (cel) at (4,0) {Celery};
+> \node[box,fill=orange!10] (llm2) at (4,-1.5) {Gemini};
+> \node[box,fill=red!10] (rd) at (4,-3) {Redis};
+> \draw[arrow] (fb2) -- node[right,font=\small\sffamily] {POST$\to$task\_id} (be_a);
+> \draw[arrow] (be_a) -- (cel);
+> \draw[arrow] (cel) -- (llm2);
+> \draw[arrow] (llm2) -- (rd);
+> \draw[arrow] (fb2) to[bend right=45] node[right,font=\small\sffamily] {GET SSE} (4,-4.5);
+> \draw[arrow] (4,-4.5) to[bend right=45] (rd);
+> \node[font=\small\sffamily] at (4,-5.5) {Pros: No timeout, resilient\\Scale workers independently};
+> \end{tikzpicture}
+> \end{document}
+> ```
+
 ---
 
 ## 11. Known Technical Debt
@@ -2583,6 +3062,7 @@ Upload PDF → POST /ingest (multipart)
 | `except: pass` | `db.py:277-278`, `pdf_extractor.py:93` | Silently hides real errors |
 | No rate limiting on LLM calls | Throughout | Can burn through API quotas |
 | Slow ingestion (no parallelism) | `rag.py`, `pdf_extractor.py` | PDF extraction runs in a single thread |
+| Bloom-level classification skipped | `routers/query.py:77` (`ponytail:` comment) | Feedback endpoint does not classify Bloom level — `ks.update_state` uses default `bloom_level=0` |
 
 ### Architectural Issues
 
@@ -2598,7 +3078,7 @@ Upload PDF → POST /ingest (multipart)
 
 ## 12. Status & Deferred Items
 
-### Current Status (as of 2026-07-26)
+### Current Status (as of 2026-07-28)
 
 | Area | Status |
 |------|--------|
@@ -2617,6 +3097,8 @@ Upload PDF → POST /ingest (multipart)
 | Docker deployment (5 services) | ✅ Complete |
 | LLM multi-key rotation | ✅ Complete |
 | E2E tests (Playwright) | ✅ Partial |
+| Async query pipeline (Celery + Redis streaming) | ✅ Complete |
+| Chat session recovery (sessionStorage) | ✅ Complete |
 
 ### Deferred / Missing
 
@@ -2626,7 +3108,6 @@ Upload PDF → POST /ingest (multipart)
 - Faculty activity log
 - Engagement metrics
 - Course mastery endpoint
-- Analytics batch endpoint
 
 **Frontend:**
 - Quiz page uses mock data
@@ -2644,9 +3125,10 @@ Upload PDF → POST /ingest (multipart)
 - `require_role` not applied to all non-admin routes (some rely on middleware only)
 - `Depends(get_current_user)` not used on all routes
 - Quiz/flashcards frontend pages show placeholder data
-- AI Assistant chat page not fully integrated with streaming
+- Analytics batch endpoint not implemented
 - Faculty analytics page uses mock data
+- Faculty activity log not built
 
 ---
 
-*End of Implementation Reference. This document covers the full codebase as of 2026-07-26.*
+*End of Implementation Reference. This document covers the full codebase as of 2026-07-28.*
