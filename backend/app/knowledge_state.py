@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+
 from app.db import get_db
 
 LEARNING_RATE = 0.15

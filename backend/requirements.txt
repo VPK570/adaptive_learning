@@ -17,4 +17,6 @@ slowapi
 nltk
 celery[redis]
 redis>=5.0
+pytesseract
+pdf2image
 # py-fsrs — spaced repetition scheduler (requires Python <3.14 for now)

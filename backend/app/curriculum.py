@@ -85,10 +85,11 @@ class CurriculumManager:
 
             # Extract structured topics from syllabus text
             try:
-                from app.topics import extract_topics_from_syllabus, store_course_topics
+                from app.topics import extract_topics_from_syllabus, store_course_topics, embed_course_topics
                 full_syllabus = "\n\n".join(documents)
                 topics = await extract_topics_from_syllabus(full_syllabus)
                 await store_course_topics(course_code, topics)
+                await embed_course_topics(course_code)
                 # Back-fill topic tags on existing untagged chunks that mention the topic name
                 for topic_item in topics:
                     name = topic_item.get("topic_name", "")

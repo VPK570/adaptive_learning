@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -108,7 +109,7 @@ async def limit_upload_size(request: Request, call_next):
     return await call_next(request)
 
 
-PUBLIC_PREFIXES = ("/auth", "/health", "/docs", "/openapi.json", "/redoc")
+PUBLIC_PREFIXES = ("/auth", "/health", "/docs", "/openapi.json", "/redoc", "/pdfs")
 
 
 @app.middleware("http")
@@ -142,6 +143,11 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
+
 app.include_router(query.router)
 app.include_router(courses.router)
 app.include_router(chat.router)
@@ -156,6 +162,11 @@ app.include_router(users_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(learning_path_routes.router, prefix="/api")
 app.include_router(tasks_routes.router)
+
+import os
+_pdfs_dir = os.environ.get("PDFS_DIR", os.path.join(os.path.dirname(__file__), "storage", "pdfs"))
+os.makedirs(_pdfs_dir, exist_ok=True)
+app.mount("/pdfs", StaticFiles(directory=_pdfs_dir), name="pdfs")
 
 
 if __name__ == "__main__":

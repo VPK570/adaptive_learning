@@ -30,6 +30,17 @@ def _normalize_cited_sources(sources: list[dict]) -> list[dict]:
     return result
 
 
+async def resolve_cited_file_urls(sources: list[dict], course_code: str) -> list[dict]:
+    """Resolve file_url for each cited source."""
+    from app.citation import resolve_document_url
+    resolved = []
+    for s in sources:
+        file_url = await resolve_document_url(s.get("source_title", ""), course_code)
+        s["file_url"] = file_url
+        resolved.append(s)
+    return resolved
+
+
 def extract_cited_sources(response_text: str, chunks: list[dict]) -> list[dict]:
     """Match citations in the response back to retrieved chunks, deduped."""
     citations = extract_all_citations(response_text)
@@ -51,6 +62,7 @@ def extract_cited_sources(response_text: str, chunks: list[dict]) -> list[dict]:
                     "page": str(c["page"]) if c.get("page") is not None else "",
                     "content_type": c.get("content_type", "text"),
                     "has_image": c.get("has_image", False),
+                    "file_url": None,
                 })
                 seen_keys.add(key)
     return _normalize_cited_sources(actually_cited)
@@ -335,6 +347,7 @@ class QueryEngine:
         if not is_valid:
             yield {"type": "content", "content": f"\n\n⚠️ *Note: This answer may contain information not explicitly in your notes. Reason: {reason}*"}
         actually_cited = extract_cited_sources(full_response, chunks)
+        actually_cited = await resolve_cited_file_urls(actually_cited, course_code)
         logger.info("CITED: %d sources=%s", len(actually_cited), actually_cited)
 
         yield {
@@ -422,6 +435,7 @@ class QueryEngine:
             response_text = remove_uncited_claims(response_text)
 
         actually_cited = extract_cited_sources(response_text, chunks)
+        actually_cited = await resolve_cited_file_urls(actually_cited, course_code)
 
         return {
             "response": response_text,

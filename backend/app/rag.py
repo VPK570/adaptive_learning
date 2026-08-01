@@ -1,10 +1,13 @@
 import hashlib
+import logging
 from typing import Any
 
 from app.chunker import chunk_text, clean_text
 from app.config import settings
 from app.db import get_db
 from app.provider_router import router as client
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_file_hash(filepath: str) -> str:
@@ -147,6 +150,8 @@ class RAGPipeline:
         filepath: str,
         topic: str = "",
         metadata: dict[str, Any] | None = None,
+        file_size: int = 0,
+        file_url: str = "",
     ) -> dict[str, Any]:
         db = await get_db()
         content_hash = calculate_file_hash(filepath)
@@ -157,60 +162,194 @@ class RAGPipeline:
             {"course": course_code, "hash": content_hash}
         )
         if existing:
+            existing_id = existing[0]["id"]
+            await db.query(
+                "UPDATE $id SET file_path = $fp, file_url = $fu, file_size = $fs",
+                {"id": existing_id, "fp": filepath, "fu": file_url, "fs": file_size}
+            )
             return {
-                "text_chunks": 0,
-                "image_chunks": 0,
-                "total_chunks": 0,
-                "course_code": course_code,
-                "document_title": document_title,
-                "status": "already_ingested"
+                "text_chunks": 0, "image_chunks": 0, "total_chunks": 0,
+                "course_code": course_code, "document_title": document_title,
+                "status": "already_ingested", "doc_id": str(existing_id),
             }
 
-        from app.pdf_extractor import extract_all_pages
+        from app.pdf_extractor import extract_all_pages, detect_sections
+        from app.topics import (
+            classify_sections_llm, classify_sections_embedding,
+            resolve_topic_boundaries, extract_extra_topics_llm, get_course_topics
+        )
+        from app.chunker import chunk_by_topic_regions
+
         pages_content = await extract_all_pages(filepath)
 
-        text_parts = []
+        # Collect image items separately (unchanged path)
         all_image_items = []
-
         for page in pages_content:
-            if page.text.strip():
-                text_parts.append(f"[Page {page.page_num}]\n{page.text}")
             for img in page.images:
                 all_image_items.append({
-                    "image_b64": img.b64_str,
-                    "mime_type": img.mime_type,
+                    "image_b64": img.b64_str, "mime_type": img.mime_type,
                     "page": page.page_num,
                     "text": f"Diagram from {document_title}, Page {page.page_num}",
                 })
 
-        text_result = {"chunks_ingested": 0}
+        # ── Late chunking pipeline: detect sections → classify → chunk within topics ──
+        sections = detect_sections(pages_content) if pages_content else []
+
+        classifications = None
+        if sections:
+            try:
+                classifications = await classify_sections_llm(sections, course_code)
+            except Exception:
+                logger.warning("classify_sections_llm failed", exc_info=True)
+            if classifications is None:
+                try:
+                    classifications = await classify_sections_embedding(sections, course_code)
+                except Exception:
+                    logger.warning("classify_sections_embedding failed", exc_info=True)
+
+        if classifications:
+            topic_regions = resolve_topic_boundaries(sections, classifications)
+        elif sections:
+            topic_regions = [{
+                "topic": "uncategorized", "heading": document_title,
+                "page_start": sections[0].page_start,
+                "page_end": sections[-1].page_end,
+                "text": "\n\n".join(s.text for s in sections),
+            }]
+        else:
+            topic_regions = []
+
+        all_chunks = chunk_by_topic_regions(topic_regions, self.chunk_size, self.overlap)
+
+        # Embed and store text chunks (grouped by topic for batch embedding)
+        text_chunks_ingested = 0
+        chunks_to_insert = []
+        if all_chunks:
+            topic_groups = {}
+            for chunk in all_chunks:
+                topic_groups.setdefault(chunk.topic, []).append(chunk)
+
+            for topic_name, chunk_group in topic_groups.items():
+                texts = [c.text for c in chunk_group if c.text.strip()]
+                if not texts:
+                    continue
+                try:
+                    embeddings = await client.embed_text_batch(texts)
+                except Exception:
+                    logger.warning("embed_text_batch failed", exc_info=True)
+                    embeddings = [None] * len(texts)
+
+                for chunk, emb in zip(chunk_group, embeddings):
+                    if emb is None:
+                        continue
+                    chunks_to_insert.append({
+                        "course_code": course_code,
+                        "source_title": document_title,
+                        "topic": chunk.topic,
+                        "page": chunk.page,
+                        "section_heading": chunk.section_heading,
+                        "text": chunk.text,
+                        "embedding": emb,
+                        "content_type": "text",
+                    })
+
+            if chunks_to_insert:
+                await db.query("INSERT INTO text_chunk $chunks", {"chunks": chunks_to_insert})
+                text_chunks_ingested = len(chunks_to_insert)
+
+        # Images (unchanged)
         image_result = {"chunks_ingested": 0, "skipped": 0}
-
-        if text_parts:
-            full_text = "\n\n".join(text_parts)
-            text_result = await self.ingest(course_code, document_title, full_text, topic, metadata)
-
         if all_image_items:
             image_result = await self.ingest_images(course_code, document_title, all_image_items, topic, metadata)
 
-        # Record ingestion in document table
+        # ── Coverage calculation ──
+        total_chunks = len(chunks_to_insert)
+        course_topics = await get_course_topics(course_code)
+
+        topic_data = {}
+        for chunk in chunks_to_insert:
+            t = chunk["topic"]
+            topic_data.setdefault(t, {"count": 0, "pages": set()})
+            topic_data[t]["count"] += 1
+            topic_data[t]["pages"].add(chunk["page"])
+
+        topics_coverage = []
+        for t in course_topics:
+            name = t["topic_name"]
+            data = topic_data.get(name, {"count": 0, "pages": set()})
+            pct = (data["count"] / total_chunks * 100) if total_chunks > 0 else 0
+            pages = sorted(data["pages"])
+            topics_coverage.append({
+                "topic_name": name, "chunk_count": data["count"],
+                "coverage_pct": round(pct, 1),
+                "page_min": pages[0] if pages else None,
+                "page_max": pages[-1] if pages else None,
+                "depth": "mention" if pct < 15 else "moderate" if pct < 40 else "comprehensive",
+            })
+
+        # Module-level coverage (gap-based grouping by order_index)
+        modules = []
+        current_module = {"topics": []}
+        last_idx = None
+        for t in sorted(course_topics, key=lambda x: x.get("order_index", 0)):
+            idx = t.get("order_index", 0)
+            if last_idx is not None and idx - last_idx > 2:
+                modules.append(current_module)
+                current_module = {"topics": []}
+            current_module["topics"].append(t["topic_name"])
+            last_idx = idx
+        if current_module["topics"]:
+            modules.append(current_module)
+
+        module_coverage = []
+        for i, m in enumerate(modules, 1):
+            covered = sum(1 for t in m["topics"] if topic_data.get(t, {}).get("count", 0) > 0)
+            module_coverage.append({
+                "module": f"Module {i}", "topics_total": len(m["topics"]),
+                "topics_covered": covered,
+                "coverage_pct": round(covered / len(m["topics"]) * 100, 1) if m["topics"] else 0,
+            })
+
+        # Extra topics from uncategorized chunks
+        uncategorized_chunks = [
+            {"text": c.text, "page_start": c.page, "page_end": c.page}
+            for c in all_chunks if c.topic == "uncategorized"
+        ] if all_chunks else []
+        extra_topics = []
+        if uncategorized_chunks:
+            try:
+                extra_topics = await extract_extra_topics_llm(uncategorized_chunks[:10], course_code)
+            except Exception:
+                logger.warning("extract_extra_topics_llm failed", exc_info=True)
+
+        topic_analysis = {
+            "topics": topics_coverage,
+            "module_coverage": module_coverage,
+            "extra_topics": extra_topics,
+            "total_chunks": total_chunks,
+            "uncategorized_chunks": len(uncategorized_chunks),
+        }
+
+        # Store document record
         from datetime import datetime
-        await db.query(
-            "INSERT INTO document {course_code: $course, filename: $file, content_hash: $hash, doc_type: 'material', created_at: $time}",
-            {
-                "course": course_code,
-                "file": document_title,
-                "hash": content_hash,
-                "time": datetime.now().isoformat()
-            }
+        result = await db.query(
+            "INSERT INTO document $doc RETURN id",
+            {"doc": {
+                "course_code": course_code, "filename": document_title,
+                "content_hash": content_hash, "doc_type": "material",
+                "created_at": datetime.now().isoformat(),
+                "file_path": filepath, "file_url": file_url,
+                "file_size": file_size, "topic_analysis": topic_analysis,
+            }}
         )
+        doc_id = str(result[0]["id"]) if result and len(result) > 0 else None
 
         return {
-            "text_chunks": text_result["chunks_ingested"],
+            "text_chunks": text_chunks_ingested,
             "image_chunks": image_result["chunks_ingested"],
-            "total_chunks": text_result["chunks_ingested"] + image_result["chunks_ingested"],
-            "course_code": course_code,
-            "document_title": document_title,
+            "total_chunks": text_chunks_ingested + image_result["chunks_ingested"],
+            "course_code": course_code, "document_title": document_title,
+            "topic_analysis": topic_analysis, "doc_id": doc_id,
         }
 
     async def retrieve(

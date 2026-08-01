@@ -1,5 +1,6 @@
 """Text chunking utilities — 512-token sentence-aware chunking."""
 
+from dataclasses import dataclass, field
 import re
 import tiktoken
 
@@ -77,6 +78,37 @@ def clean_text(text: str) -> str:
     # Restore [Page X] markers
     text = re.sub(r"__PAGE_(\d+)__", r"[Page \1]", text)
     return text.strip()
+
+
+@dataclass
+class Chunk:
+    text: str
+    page: int
+    topic: str
+    section_heading: str
+    start_char: int = 0
+    end_char: int = 0
+
+
+def chunk_by_topic_regions(
+    regions: list[dict],
+    chunk_size: int = 512,
+    overlap_tokens: int = 64,
+) -> list[Chunk]:
+    """Late chunking: run chunk_text on each topic region. All child chunks inherit topic + heading."""
+    chunks: list[Chunk] = []
+    for region in regions:
+        if not region["text"].strip():
+            continue
+        raw_chunks = chunk_text(region["text"], chunk_size, overlap_tokens)
+        for chunk_text_str, start, end in raw_chunks:
+            page = extract_page_for_chunk(chunk_text_str, region["text"], start)
+            chunks.append(Chunk(
+                text=chunk_text_str, page=page,
+                topic=region["topic"], section_heading=region["heading"],
+                start_char=start, end_char=end,
+            ))
+    return chunks
 
 
 def extract_page_for_chunk(chunk_text: str, full_text: str, start_index: int) -> int:

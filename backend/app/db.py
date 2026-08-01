@@ -2,7 +2,9 @@
 import asyncio
 import logging
 from typing import Optional
+
 from surrealdb import AsyncSurreal
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,8 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS topic ON TABLE text_chunk TYPE string;
             DEFINE FIELD IF NOT EXISTS page ON TABLE text_chunk TYPE number;
             DEFINE FIELD IF NOT EXISTS content_type ON TABLE text_chunk TYPE string;
+            REMOVE FIELD IF EXISTS section_heading ON TABLE text_chunk;
+            DEFINE FIELD section_heading ON TABLE text_chunk TYPE option<string>;
 
             DEFINE ANALYZER IF NOT EXISTS chunk_analyzer TOKENIZERS blank,punct FILTERS lowercase,snowball(english);
             DEFINE INDEX IF NOT EXISTS text_search_idx ON TABLE text_chunk FIELDS text FULLTEXT ANALYZER chunk_analyzer BM25;
@@ -148,6 +152,8 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS learning_objectives ON TABLE course_topic TYPE array;
             DEFINE FIELD IF NOT EXISTS learning_objectives[*] ON TABLE course_topic TYPE string;
             DEFINE FIELD IF NOT EXISTS order_index ON TABLE course_topic TYPE number;
+            REMOVE FIELD IF EXISTS embedding ON TABLE course_topic;
+            DEFINE FIELD embedding ON TABLE course_topic TYPE option<array>;
             DEFINE INDEX IF NOT EXISTS ct_course_topic_idx ON TABLE course_topic FIELDS course_code, topic_name UNIQUE;
 
             DEFINE TABLE IF NOT EXISTS course SCHEMAFULL;
@@ -159,11 +165,13 @@ class SurrealDBManager:
             DEFINE INDEX IF NOT EXISTS course_code_idx ON TABLE course FIELDS course_code UNIQUE;
 
             DEFINE TABLE IF NOT EXISTS document SCHEMAFULL;
-            DEFINE FIELD IF NOT EXISTS course_code ON TABLE document TYPE string;
-            DEFINE FIELD IF NOT EXISTS filename ON TABLE document TYPE string;
-            DEFINE FIELD IF NOT EXISTS content_hash ON TABLE document TYPE string;
-            DEFINE FIELD IF NOT EXISTS doc_type ON TABLE document TYPE string;
-            DEFINE FIELD IF NOT EXISTS created_at ON TABLE document TYPE string;
+            ALTER TABLE document SCHEMALESS;
+            REMOVE FIELD IF EXISTS topic_analysis ON TABLE document;
+            REMOVE FIELD IF EXISTS topic_analysis.topics ON TABLE document;
+            REMOVE FIELD IF EXISTS topic_analysis.module_coverage ON TABLE document;
+            REMOVE FIELD IF EXISTS topic_analysis.extra_topics ON TABLE document;
+            REMOVE FIELD IF EXISTS topic_analysis.total_chunks ON TABLE document;
+            REMOVE FIELD IF EXISTS topic_analysis.uncategorized_chunks ON TABLE document;
             DEFINE INDEX IF NOT EXISTS document_hash_idx ON TABLE document FIELDS course_code, content_hash UNIQUE;
 
             DEFINE TABLE IF NOT EXISTS user SCHEMAFULL;

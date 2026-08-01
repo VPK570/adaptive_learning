@@ -1,20 +1,21 @@
 """Citation enforcement — every factual claim must cite a source chunk."""
 
+import logging
 import re
 import nltk
 from nltk.tokenize import sent_tokenize
 
+logger = logging.getLogger(__name__)
+
 CITATION_RE = re.compile(r"\[Source:\s*[^\]]+\]", re.IGNORECASE)
 
-try:
-    nltk.data.find("tokenizers/punkt")
-except LookupError:
-    nltk.download("punkt")
 
-try:
-    nltk.data.find("tokenizers/punkt_tab")
-except LookupError:
-    nltk.download("punkt_tab")
+def _ensure_nltk_data():
+    for pkg in ("punkt", "punkt_tab"):
+        try:
+            nltk.data.find(f"tokenizers/{pkg}")
+        except LookupError:
+            nltk.download(pkg)
 
 def parse_citation(citation_text: str) -> tuple[str, str] | tuple[None, None]:
     """Extract title and page/slide number from a citation string."""
@@ -31,6 +32,28 @@ def parse_citation(citation_text: str) -> tuple[str, str] | tuple[None, None]:
     return None, None
 
 
+async def resolve_document_url(title: str, course_code: str) -> str | None:
+    """Look up document file_url by title match for citation linking."""
+    try:
+        from app.db import get_db
+        db = await get_db()
+        result = await db.query(
+            "SELECT file_url FROM document WHERE course_code = $code AND filename = $title AND file_url != NONE LIMIT 1",
+            {"code": course_code, "title": title}
+        )
+        if result and len(result) > 0 and result[0].get("file_url"):
+            return result[0]["file_url"]
+        result = await db.query(
+            "SELECT file_url FROM document WHERE course_code = $code AND filename CONTAINS $partial AND file_url != NONE LIMIT 1",
+            {"code": course_code, "partial": title[:20]}
+        )
+        if result and len(result) > 0 and result[0].get("file_url"):
+            return result[0]["file_url"]
+    except Exception as e:
+        logger.warning("resolve_document_url failed: %s", e)
+    return None
+
+
 def has_citation(text: str) -> bool:
     return bool(CITATION_RE.search(text))
 
@@ -44,6 +67,7 @@ def extract_all_citations(text: str) -> list[str]:
 def remove_uncited_claims(text: str) -> str:
     """Remove or flag claims that lack a citation."""
    
+    _ensure_nltk_data()
     sentences = sent_tokenize(text)
     kept = []
     dropped = 0

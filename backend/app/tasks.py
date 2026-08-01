@@ -42,19 +42,46 @@ def restore_request_id(task, **kwargs):
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=5, autoretry_for=(ValueError,))
 def ingest_pdf_task(self, course_code: str, document_title: str, filepath: str, topic: str = "", metadata: dict | None = None) -> dict:
+    import shutil
+    from pathlib import Path
+
+    # Move file to permanent storage
+    pdfs_dir = Path("storage") / "pdfs" / course_code
+    pdfs_dir.mkdir(parents=True, exist_ok=True)
+
+    import hashlib
+    sha256 = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for block in iter(lambda: f.read(4096), b""):
+            sha256.update(block)
+    content_hash = sha256.hexdigest()
+    doc_id = content_hash[:16]
+    permanent_path = pdfs_dir / f"{doc_id}.pdf"
+    file_url = f"/pdfs/{course_code}/{doc_id}.pdf"
+    file_size = os.path.getsize(filepath)
+
+    if os.path.exists(str(permanent_path)):
+        os.remove(filepath)
+    else:
+        shutil.move(filepath, str(permanent_path))
+
     from app.rag import RAGPipeline
     rag = RAGPipeline()
     try:
-        return _worker_loop.run_until_complete(rag.ingest_pdf(
+        result = _worker_loop.run_until_complete(rag.ingest_pdf(
             course_code=course_code,
             document_title=document_title,
-            filepath=filepath,
+            filepath=str(permanent_path),
             topic=topic,
             metadata=metadata,
+            file_size=file_size,
+            file_url=file_url,
         ))
+        result["doc_id"] = doc_id
+        return result
     finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        if os.path.exists(str(permanent_path)) and os.path.getsize(str(permanent_path)) == 0:
+            os.remove(str(permanent_path))
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=5, autoretry_for=(ValueError,))

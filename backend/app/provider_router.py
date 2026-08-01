@@ -348,7 +348,7 @@ class ProviderRouter:
                     base_url, "/chat/completions",
                     headers_fn, keyring,
                     body,
-                    timeout=120,
+                    timeout=60,
                     context="chat_with_schema",
                 )
                 break
