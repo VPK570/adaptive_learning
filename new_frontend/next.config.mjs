@@ -29,6 +29,7 @@ const nextConfig = {
     { source: '/api/:path*', destination: `${BACKEND}/api/:path*` },
     { source: '/ingest', destination: `${BACKEND}/ingest` },
     { source: '/chunks', destination: `${BACKEND}/chunks` },
+    { source: '/pdfs/:path*', destination: `${BACKEND}/pdfs/:path*` },
     { source: '/health', destination: `${BACKEND}/health` },
     { source: '/generate-paper', destination: `${BACKEND}/generate-paper` },
     { source: '/questions', destination: `${BACKEND}/questions` },

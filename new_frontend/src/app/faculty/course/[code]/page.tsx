@@ -18,6 +18,15 @@ interface UploadFile {
   status: 'uploading' | 'processing' | 'error';
   size: string;
   progress: number;
+  taskId?: string;
+}
+
+interface TopicAnalysis {
+  topics: { topic_name: string; chunk_count: number; coverage_pct: number; page_min: number; page_max: number; depth: string }[];
+  module_coverage: { module: string; topics_total: number; topics_covered: number; coverage_pct: number }[];
+  extra_topics: { name: string; page_range: number[]; description: string }[];
+  total_chunks: number;
+  uncategorized_chunks: number;
 }
 
 export default function UploadMaterials({ params }: { params: Promise<{ code: string }> }) {
@@ -27,6 +36,8 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
   const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'materials' | 'curriculum'>('materials');
   const [selectedTopic, setSelectedTopic] = useState('');
+  const [topicAnalysis, setTopicAnalysis] = useState<TopicAnalysis | null>(null);
+  const [analysisDocId, setAnalysisDocId] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -88,11 +99,26 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           ));
         },
       )
-        .then(() => {
+        .then((data: { task_id: string; status: string }) => {
           setUploadingFiles(prev => prev.map(f =>
-            f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
+            f.id === fileId ? { ...f, status: 'processing', progress: 100, taskId: data.task_id } : f
           ));
           queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
+          // Poll for task completion
+          const poll = setInterval(async () => {
+            try {
+              const result = await ingestionApi.pollTask(data.task_id);
+              if (result.status === 'SUCCESS' && result.result?.topic_analysis) {
+                clearInterval(poll);
+                setTopicAnalysis(result.result.topic_analysis);
+                setAnalysisDocId(fileId);
+              } else if (result.status === 'FAILURE') {
+                clearInterval(poll);
+              }
+            } catch {
+              clearInterval(poll);
+            }
+          }, 2000);
         })
         .catch(() => {
           setUploadingFiles(prev => prev.map(f =>
@@ -242,33 +268,79 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
             ) : null}
 
             {activeTab === 'materials' && (
-              <div className={styles.docList}>
-                {stats?.documents?.length > 0 ? (
-                  stats.documents.map((doc, i) => (
-                    <div key={i} className={styles.docItem}>
-                      <div className={styles.docIcon}>
-                        <FileText size={20} />
+              <>
+                <div className={styles.docList}>
+                  {stats?.documents?.length > 0 ? (
+                    stats.documents.map((doc, i) => (
+                      <div key={i} className={styles.docItem}>
+                        <div className={styles.docIcon}>
+                          <FileText size={20} />
+                        </div>
+                        <div className={styles.docInfo}>
+                          <span className={styles.docName}>{doc.name}</span>
+                        </div>
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => handleDeleteDoc(doc.name)}
+                          disabled={deletingFilename === doc.name}
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-                      <div className={styles.docInfo}>
-                        <span className={styles.docName}>{doc.name}</span>
-                      </div>
-                      <button
-                        className={styles.deleteBtn}
-                        onClick={() => handleDeleteDoc(doc.name)}
-                        disabled={deletingFilename === doc.name}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                    ))
+                  ) : (
+                    <div className={styles.emptyDocs}>
+                      <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center' }}>
+                        No materials uploaded yet.
+                      </p>
                     </div>
-                  ))
-                ) : (
-                  <div className={styles.emptyDocs}>
-                    <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface-variant)', textAlign: 'center' }}>
-                      No materials uploaded yet.
-                    </p>
+                  )}
+                </div>
+                {topicAnalysis && analysisDocId && (
+                  <div style={{ marginTop: 'var(--space-6)' }}>
+                    <h3 className={styles.sectionTitle}>Topic Analysis</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                      {topicAnalysis.topics.map((t, i) => (
+                        <div key={i} className={styles.topicCard}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span className={styles.topicName}>{t.topic_name}</span>
+                            <span style={{ font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)' }}>{t.coverage_pct}%</span>
+                          </div>
+                          <div style={{ height: 8, background: 'var(--color-surface-container-high)', borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
+                            <div style={{ height: '100%', width: `${Math.min(t.coverage_pct, 100)}%`, background: 'var(--color-primary)', borderRadius: 4, transition: 'width 0.3s' }} />
+                          </div>
+                          <div style={{ display: 'flex', gap: 'var(--space-3)', font: 'var(--text-body-sm)', color: 'var(--color-on-surface-variant)' }}>
+                            <span>p.{t.page_min}-{t.page_max}</span>
+                            <span>{t.depth}</span>
+                            <span>{t.chunk_count} chunks</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {topicAnalysis.module_coverage?.length > 0 && (
+                      <div style={{ marginTop: 'var(--space-4)' }}>
+                        <h4 style={{ font: 'var(--text-label-md)', marginBottom: 'var(--space-2)' }}>Module Coverage</h4>
+                        {topicAnalysis.module_coverage.map((m, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-body-sm)', padding: 'var(--space-1) 0' }}>
+                            <span>{m.module}</span>
+                            <span>{m.topics_covered}/{m.topics_total} topics ({m.coverage_pct}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {topicAnalysis.extra_topics?.length > 0 && (
+                      <div style={{ marginTop: 'var(--space-4)' }}>
+                        <h4 style={{ font: 'var(--text-label-md)', marginBottom: 'var(--space-2)' }}>Extra Topics Found</h4>
+                        {topicAnalysis.extra_topics.map((e, i) => (
+                          <div key={i} style={{ font: 'var(--text-body-sm)', padding: 'var(--space-1) 0' }}>
+                            {e.name} (p.{e.page_range[0]}-{e.page_range[1]})
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
 
             {activeTab === 'curriculum' && (

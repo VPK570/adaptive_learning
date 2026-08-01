@@ -64,9 +64,15 @@ const ChatMessage = React.memo(({ msg, feedbackLoading, onFeedback, isStreaming 
           <div className={styles.sourcesBlock}>
             <span className={styles.sourcesLabel}>Sources:</span>
             {msg.sources.map((s, i) => (
-              <span key={i} className={styles.sourceChip}>
-                <FileText size={12} /> {s.file || s.source_title}, p.{s.page}
-              </span>
+              s.file_url ? (
+                <a key={i} href={`${s.file_url}#page=${s.page}`} target="_blank" rel="noopener noreferrer" className={styles.sourceChip} style={{ textDecoration: 'none', cursor: 'pointer' }}>
+                  <FileText size={12} /> {s.file || s.source_title}, p.{s.page}
+                </a>
+              ) : (
+                <span key={i} className={styles.sourceChip}>
+                  <FileText size={12} /> {s.file || s.source_title}, p.{s.page}
+                </span>
+              )
             ))}
           </div>
         )}
@@ -194,7 +200,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ code: s
             m.id === assistantId
               ? {
                   ...m,
-                  sources: ((meta.cited_sources || meta.sources || []) as Array<Record<string, unknown>>).map(s => ({ file: (s.source_title || s.file) as string, page: s.page as number })),
+                  sources: ((meta.cited_sources || meta.sources || []) as Array<Record<string, unknown>>).map(s => ({ file: (s.source_title || s.file) as string, page: s.page as number, file_url: s.file_url as string })),
                   verified: meta.verified as boolean,
                   verificationReason: meta.verification_reason as string,
                 }

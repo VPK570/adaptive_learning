@@ -2,6 +2,8 @@ import { api } from './client';
 import type { AxiosProgressEvent } from 'axios';
 
 export const ingestionApi = {
+  pollTask: (taskId: string) =>
+    api.get(`/tasks/${taskId}`).then(r => r.data),
   ingestPdf: (file: File, courseCode: string, topic: string = '', onProgress?: (pct: number) => void) => {
     const formData = new FormData();
     formData.append('file', file);

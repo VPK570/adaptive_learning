@@ -146,7 +146,7 @@ export interface ChatMessage {
   images?: string[];
   paragraphs?: string[];
   bullets?: { label: string; text: string }[];
-  sources?: { file?: string; page?: number; source_title?: string }[];
+  sources?: { file?: string; page?: number; source_title?: string; file_url?: string }[];
   verified?: boolean;
   verificationReason?: string;
 }
