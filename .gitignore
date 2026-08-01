@@ -48,6 +48,7 @@ logs/
 chroma_db/
 chroma_data/
 chromadb/
+backend/storage/
 
 # Build
 dist/
