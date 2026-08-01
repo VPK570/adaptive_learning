@@ -4,11 +4,11 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Load .env first (may set production values), then override to test namespace
 # Must happen BEFORE any app. imports since Settings class reads os.getenv() at class body level
-dotenv_path = Path(__file__).parent.parent / ".env"
+dotenv_path = Path(__file__).resolve().parent.parent / ".env"
 if dotenv_path.exists():
     from dotenv import load_dotenv
     load_dotenv(dotenv_path)

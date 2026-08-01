@@ -9,7 +9,15 @@ async def mock_client():
     with patch("app.curriculum.client") as mock:
         mock.embed_text = AsyncMock(return_value=[0.1] * 2048)
         mock.embed_text_batch = AsyncMock(side_effect=lambda texts: [[0.1] * 2048 for _ in texts])
-        yield mock
+        with patch("app.provider_router.router.embed_text", new=AsyncMock(return_value=[0.1] * 2048)):
+            with patch("app.provider_router.router.chat_with_schema", new=AsyncMock(return_value={
+                "topics": [
+                    {"topic_name": "Introduction to AI", "subtopics": ["AI basics"], "prerequisites": [], "bloom_level": "Remember", "learning_objectives": []},
+                    {"topic_name": "Neural Networks", "subtopics": ["NN basics"], "prerequisites": ["Introduction to AI"], "bloom_level": "Understand", "learning_objectives": []},
+                    {"topic_name": "Deep Learning", "subtopics": ["DL basics"], "prerequisites": ["Neural Networks"], "bloom_level": "Apply", "learning_objectives": []},
+                ]
+            })):
+                yield mock
 
 
 @pytest_asyncio.fixture

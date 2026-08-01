@@ -1,6 +1,7 @@
 """Tests for the RAG pipeline — chunking, citation, prompts, multimodal."""
 
 import pytest
+import pytest_asyncio
 
 from app.chunker import chunk_text, clean_text
 from app.citation import (
@@ -11,6 +12,14 @@ from app.query_engine import (
     build_context_window,
     build_tutor_prompt,
 )
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_surreal_singleton():
+    from app.db import SurrealDBManager
+    SurrealDBManager._instance = None
+    yield
+    SurrealDBManager._instance = None
 
 
 class TestChunking:
@@ -321,6 +330,101 @@ class TestCitationEdgeCases:
         result = _remove_uncited_claims(text)
         assert "Hash function" in result
         assert "Random claim" not in result
+
+
+# ── PDF helpers (inlined from test_e2e_pipeline) ──
+
+def _make_test_pdf(text: str) -> bytes:
+    encoded = text.encode("latin-1", errors="replace")
+    content = b"BT /F1 12 Tf 100 700 Td (" + encoded + b") Tj ET"
+    stream = b"stream\n" + content + b"\nendstream"
+    stream_len = str(len(content)).encode()
+
+    obj1 = b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    obj2 = b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    obj3 = b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+    obj4 = b"4 0 obj<</Length " + stream_len + b">>" + stream + b"endobj\n"
+    obj5 = b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+
+    body = obj1 + obj2 + obj3 + obj4 + obj5
+    offsets = [0]
+    pos = 9
+    for obj in [obj1, obj2, obj3, obj4, obj5]:
+        offsets.append(pos)
+        pos += len(obj)
+
+    xref_entries = b"".join(f"{o:010d} 00000 n \n".encode() for o in offsets)
+    trailer = (
+        b"xref\n0 6\n" + xref_entries +
+        b"trailer<</Size 6/Root 1 0 R>>\nstartxref\n" +
+        str(pos).encode() + b"\n%%EOF"
+    )
+    return b"%PDF-1.4\n" + body + trailer
+
+
+TEST_PDF_TEXT = (
+    "This document covers data structures. Arrays store elements "
+    "contiguously in memory. Linked lists use pointers between nodes."
+)
+
+
+@pytest.mark.asyncio
+async def test_topic_analysis_stored_on_ingest_pdf():
+    import os
+    import tempfile
+    from app.db import get_db
+    from app.rag import RAGPipeline
+
+    rag = RAGPipeline()
+    db = await get_db()
+    course = "TEST_TA"
+
+    # seed a course topic so coverage computation has data
+    await db.query(
+        "INSERT INTO course_topic $t",
+        {"t": {
+            "course_code": course, "topic_name": "arrays",
+            "subtopics": [], "prerequisites": [],
+            "learning_objectives": [], "order_index": 1,
+        }},
+    )
+
+    pdf_bytes = _make_test_pdf(TEST_PDF_TEXT)
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.write(pdf_bytes)
+        path = f.name
+
+    try:
+        result = await rag.ingest_pdf(
+            course_code=course,
+            document_title="Data Structures Notes",
+            filepath=path,
+            topic="data-structures",
+        )
+        assert "doc_id" in result
+        assert result["course_code"] == course
+
+        docs = await db.query(
+            "SELECT topic_analysis FROM document WHERE course_code = $code",
+            {"code": course},
+        )
+        assert docs, "document record should exist"
+        ta = docs[0].get("topic_analysis")
+        assert isinstance(ta, dict), "topic_analysis should be a dict"
+        assert "topics" in ta
+        assert "module_coverage" in ta
+        assert "extra_topics" in ta
+        assert "total_chunks" in ta
+        assert "uncategorized_chunks" in ta
+        # the seeded topic "arrays" should appear in coverage
+        topic_names = [t["topic_name"] for t in ta["topics"]]
+        assert "arrays" in topic_names
+    finally:
+        await db.query("DELETE document WHERE course_code = $code", {"code": course})
+        await db.query("DELETE course_topic WHERE course_code = $code", {"code": course})
+        await rag.delete_course(course)
+        if os.path.exists(path):
+            os.remove(path)
 
 
 if __name__ == "__main__":
