@@ -13,7 +13,7 @@ Auth is enforced via middleware on all routes except `/auth`, `/health`, `/docs`
 
 **`GET /health`**
 
-Check service health (SurrealDB + OpenRouter connectivity).
+Check service health (SurrealDB connectivity).
 
 Response:
 ```json
@@ -21,8 +21,7 @@ Response:
   "status": "ok",
   "version": "1.0.0",
   "dependencies": {
-    "surrealdb": "ok",
-    "openrouter": "ok"
+    "surrealdb": "ok"
   }
 }
 ```
@@ -170,6 +169,26 @@ Response: JSON array of question objects:
 ]
 ```
 
+**`GET /quiz/saved`**
+
+List saved quizzes for a course. Query param: `course`. Requires auth.
+
+Response: JSON array:
+```json
+[
+  {
+    "id": "uuid",
+    "course_code": "BAECE102",
+    "topic": "Flip-flops",
+    "score": 4,
+    "total": 5,
+    "questions": [...],
+    "bloom_levels": [3, 4, 2, 5, 3],
+    "created_at": "2026-08-01T..."
+  }
+]
+```
+
 ---
 
 ### Flashcards
@@ -195,6 +214,29 @@ Response: JSON array:
     "answer": "A graphical method to simplify boolean expressions..."
   }
 ]
+```
+
+**`POST /flashcards/saved/{set_id}/record`**
+
+Record a flashcard study session (known/total counts).
+
+Request body:
+```json
+{
+  "known_count": 4,
+  "total": 5
+}
+```
+
+Response:
+```json
+{
+  "id": "set_id",
+  "times_studied": 3,
+  "best_recall": 80,
+  "last_recall": 80,
+  "status": "recorded"
+}
 ```
 
 ---
@@ -224,7 +266,24 @@ Response: Generated paper object with sections and questions.
 
 **`GET /courses`**
 
-List all courses with stats (document count, chunk count).
+List all courses with stats (document count, chunk count, student count, total queries).
+
+**`GET /courses/{course_code}`**
+
+Get a single course with detailed stats including document list.
+
+Response:
+```json
+{
+  "course_code": "BAECE102",
+  "course_name": "Digital Logic Design",
+  "description": "...",
+  "icon": "🔌",
+  "doc_count": 5,
+  "chunk_count": 342,
+  "documents": ["DLD Notes.pdf", "Lab Manual.pdf"]
+}
+```
 
 **`POST /courses`**
 
@@ -256,6 +315,22 @@ Request body:
 **`DELETE /courses/{course_code}`**
 
 Delete a course. Returns `{"status": "success"}`.
+
+**`GET /courses/{course_code}/student-map`**
+
+Get student progress map for a course. Requires auth.
+
+Response:
+```json
+{
+  "student@example.com": {
+    "queries": 15,
+    "quizzes_taken": 3,
+    "avg_score": 82.0,
+    "mastery": 0.65
+  }
+}
+```
 
 ---
 
@@ -298,6 +373,20 @@ Get curriculum coverage metrics. Query param: `course_code`.
 **`GET /questions`**
 
 Get all asked questions with metadata. Query param: `course_code`.
+
+**`GET /students/me/stats`**
+
+Get current student's stats across all courses. Requires auth.
+
+Response:
+```json
+{
+  "total_queries": 42,
+  "courses_active": 3,
+  "quiz_avg_score": 75.5,
+  "flashcards_studied": 12
+}
+```
 
 ---
 

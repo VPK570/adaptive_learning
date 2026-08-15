@@ -2,7 +2,7 @@
 
 ## Overview
 
-The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learning system. It uses SurrealDB as the primary database, and OpenRouter for all AI/embedding workloads.
+The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learning system. It uses SurrealDB as the primary database, and a provider router for AI workloads (Gemini for chat, OpenRouter for embeddings).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -44,12 +44,13 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
          │  │   └── tasks.py       (Celery tasks)      │
         │  ├── app/rag.py         (RAG pipeline)     │
         │  ├── app/query_engine.py(Socratic engine)  │
-        │  ├── app/openrouter.py  (LLM client)       │
+        │  ├── app/provider_router.py (LLM routing)  │
         │  ├── app/db.py          (SurrealDB conn)   │
         │  ├── app/curriculum.py  (curriculum mgmt)  │
         │  ├── app/analytics.py   (analytics logic)  │
         │  ├── app/courses.py     (course CRUD)      │
         │  ├── app/chat_history.py(chat persistence) │
+        │  ├── app/topics.py      (topic analysis)   │
          │  ├── app/learning_path.py(ZPD recs)         │
         │  ├── app/paper_generator.py                │
         │  ├── app/chunker.py     (text chunking)    │
@@ -73,15 +74,15 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
                │ persistent│
                │ Docker   │
                │ service  │
-               └──────────┘
-                        │
-                        ▼
-                  ┌──────────┐
-                  │ OpenRouter│
-                  │ (external)│
-                  │ LLM +     │
-                  │ Embeddings│
-                  └──────────┘
+                └──────────┘
+                         │
+                         ▼
+                   ┌──────────┐
+                   │Provider  │
+                   │Router    │
+                   │(Gemini + │
+                   │OpenRouter)│
+                   └──────────┘
 ```
 
 ## Storage
@@ -96,7 +97,7 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
 ### Vector Search
 - Hybrid BM25 + vector similarity search with RRF fusion (all in SurrealDB)
 - HNSW indexes on `text_chunk.embedding`, `image_chunk.embedding`, `curriculum_chunk.embedding`
-- Dimension probed dynamically at startup via OpenRouter embedding call
+- Dimension probed dynamically at startup via provider_router embedding call
 
 ## AI Pipeline
 
@@ -105,13 +106,13 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
 |-----|----------|-------|
 | Text embeddings | OpenRouter (free) | `nvidia/llama-nemotron-embed-vl-1b-v2:free` |
 | Image embeddings | OpenRouter (free) | Same (multimodal mode, 1024-dim) |
-| LLM (reasoning) | OpenRouter (free) | `inclusionai/ring-2.6-1t:free` |
+| LLM (reasoning) | Gemini (via provider_router) | Multi-key rotation with exponential backoff |
 
 ### RAG Pipeline Stages
 1. **Gatekeeper** — LLM checks if query is course-relevant
 2. **Enrichment** — Assembles context from retrieved chunks
-3. **Retrieval** — Hybrid BM25 + vector search, RRF fusion
-4. **Generation** — Socratic response via Ring LLM
+3. **Retrieval** — Hybrid BM25 + vector search, RRF fusion with late chunking
+4. **Generation** — Socratic response via Gemini
 5. **Verification** — LLM verifies answer is grounded in context
 6. **Citation Enforcement** — Multi-pass citation validation
 
@@ -132,7 +133,7 @@ The platform is a multimodal RAG (Retrieval-Augmented Generation) adaptive learn
 
 ## Auth
 
-Auth is enforced via a middleware in `server.py` that validates Bearer JWT tokens on all routes except `/auth`, `/health`, `/docs`. Role-based access control is available via `require_role()` decorator from `app/auth.py` (used by admin, ingestion, and paper routers).
+Auth is enforced via a middleware in `server.py` that validates Bearer JWT tokens on all routes except `/auth`, `/health`, `/healthz`, `/docs`, `/tasks`. Role-based access control is available via `require_role()` decorator from `app/auth.py` (used by admin, ingestion, and paper routers).
 
 ## Key Technical Debt
 - No DI/IoC — global singletons at module level  
@@ -141,3 +142,4 @@ Auth is enforced via a middleware in `server.py` that validates Bearer JWT token
 - `except: pass` silently swallows errors in PDF extraction
 - No database abstraction layer — direct SurrealQL in every module
 - SurrealDB connection manager has deadlock risk on failed connection
+- Deleted `deep_kt.py` and `openrouter.py` — functionality moved to provider_router.py
