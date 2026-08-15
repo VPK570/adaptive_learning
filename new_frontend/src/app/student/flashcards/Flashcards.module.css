@@ -155,6 +155,28 @@
   text-transform: uppercase;
 }
 
+.studyBtn {
+  flex-shrink: 0;
+  padding: 4px var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(192, 193, 255, 0.1);
+  font: var(--text-label-md);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.studyBtn:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.studyBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .studyingSection {
   max-width: 600px;
   margin: 0 auto;

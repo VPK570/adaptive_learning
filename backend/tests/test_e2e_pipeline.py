@@ -5,10 +5,12 @@ Tests: ingest PDF → retrieve → generate response → validate citations.
 
 import os
 import tempfile
+
 import pytest
-from app.rag import RAGPipeline
+
+from app.citation import remove_uncited_claims, validate_citations
 from app.query_engine import QueryEngine
-from app.citation import validate_citations, remove_uncited_claims
+from app.rag import RAGPipeline
 
 _e2e = pytest.mark.skipif(True, reason="E2E integration tests — requires running infra + OpenRouter API key")
 

@@ -1,19 +1,26 @@
 """Tests for auth module — password hashing, JWT tokens, role enforcement."""
 import os
-import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
+
+import pytest
 from jose import jwt
 
 os.environ["JWT_SECRET"] = "test_secret_key_for_pytest"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["JWT_EXPIRE_MINUTES"] = "60"
 
-from app.auth import (
-    hash_password, verify_password, create_access_token, decode_token,
-    get_current_user, get_current_user_from_request, require_role, VALID_ROLES,
-)
 from fastapi import HTTPException
+
+from app.auth import (
+    VALID_ROLES,
+    create_access_token,
+    decode_token,
+    get_current_user_from_request,
+    hash_password,
+    require_role,
+    verify_password,
+)
 
 
 class TestPasswordHashing:

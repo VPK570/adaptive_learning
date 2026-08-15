@@ -27,23 +27,7 @@ async def generate_paper(course_code: str, total_marks: int, difficulty: str, to
     - Include Multiple Choice Questions (MCQs), Short Answer Questions, and Long Answer Questions.
     - Ensure marks add up to approximately {total_marks}.{bloom_instruction}
     
-    Return the paper as a JSON object with this structure:
-    {{
-      "course_code": "{course_code}",
-      "total_marks": {total_marks},
-      "difficulty": "{difficulty}",
-      "sections": {{
-        "mcq": [
-          {{ "question": "...", "options": ["A", "B", "C", "D"], "answer": "...", "marks": 1, "taxonomy": "Remember" }}
-        ],
-        "short_answer": [
-          {{ "question": "...", "marks": 5, "taxonomy": "Understand" }}
-        ],
-        "long_answer": [
-          {{ "question": "...", "marks": 10, "taxonomy": "Apply" }}
-        ]
-      }}
-    }}
+    Return JSON: {{"course_code":"...","total_marks":N,"difficulty":"...","sections":{{"mcq":[{{"question":"...","options":["A","B","C","D"],"answer":"...","marks":1,"taxonomy":"Remember"}}],"short_answer":[{{"question":"...","marks":5,"taxonomy":"Understand"}}],"long_answer":[{{"question":"...","marks":10,"taxonomy":"Apply"}}]}}}}
     """
 
     messages = [
@@ -51,7 +35,7 @@ async def generate_paper(course_code: str, total_marks: int, difficulty: str, to
         {"role": "user", "content": prompt}
     ]
 
-    response_schema = {
+    schema = {
         "type": "object",
         "properties": {
             "course_code": {"type": "string"},
@@ -60,44 +44,9 @@ async def generate_paper(course_code: str, total_marks: int, difficulty: str, to
             "sections": {
                 "type": "object",
                 "properties": {
-                    "mcq": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "question": {"type": "string"},
-                                "options": {"type": "array", "items": {"type": "string"}},
-                                "answer": {"type": "string"},
-                                "marks": {"type": "integer"},
-                                "taxonomy": {"type": "string"}
-                            },
-                            "required": ["question", "options", "answer", "marks", "taxonomy"]
-                        }
-                    },
-                    "short_answer": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "question": {"type": "string"},
-                                "marks": {"type": "integer"},
-                                "taxonomy": {"type": "string"}
-                            },
-                            "required": ["question", "marks", "taxonomy"]
-                        }
-                    },
-                    "long_answer": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "question": {"type": "string"},
-                                "marks": {"type": "integer"},
-                                "taxonomy": {"type": "string"}
-                            },
-                            "required": ["question", "marks", "taxonomy"]
-                        }
-                    }
+                    "mcq": {"type": "array", "items": {"type": "object", "properties": {"question": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}, "answer": {"type": "string"}, "marks": {"type": "integer"}, "taxonomy": {"type": "string"}}, "required": ["question", "options", "answer", "marks", "taxonomy"]}},
+                    "short_answer": {"type": "array", "items": {"type": "object", "properties": {"question": {"type": "string"}, "marks": {"type": "integer"}, "taxonomy": {"type": "string"}}, "required": ["question", "marks", "taxonomy"]}},
+                    "long_answer": {"type": "array", "items": {"type": "object", "properties": {"question": {"type": "string"}, "marks": {"type": "integer"}, "taxonomy": {"type": "string"}}, "required": ["question", "marks", "taxonomy"]}},
                 },
                 "required": ["mcq", "short_answer", "long_answer"]
             }
@@ -105,5 +54,4 @@ async def generate_paper(course_code: str, total_marks: int, difficulty: str, to
         "required": ["course_code", "total_marks", "difficulty", "sections"]
     }
 
-    result = await client.chat_with_schema(messages, response_schema)
-    return result
+    return await client.chat_with_schema(messages, schema)

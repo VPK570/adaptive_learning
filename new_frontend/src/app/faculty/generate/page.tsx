@@ -140,7 +140,7 @@ export default function QuestionPaperGenerator() {
             </section>
 
             <section className={styles.formSection}>
-              <h2 className={styles.sectionTitle}>Bloom's Taxonomy Levels</h2>
+              <h2 className={styles.sectionTitle}>Bloom&apos;s Taxonomy Levels</h2>
               <div className={styles.bloomGrid}>
                 {Object.entries(bloomLevels).map(([level, checked]) => (
                   <CheckboxCard

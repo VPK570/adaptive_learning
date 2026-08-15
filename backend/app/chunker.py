@@ -1,10 +1,9 @@
 """Text chunking utilities — 512-token sentence-aware chunking."""
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass
+
 import tiktoken
-
-
 
 _encoder = None
 

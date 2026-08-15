@@ -1,6 +1,8 @@
 
 import unittest
-from app.validation import sanitize_id, validate_id, MAX_SESSION_ID_LENGTH
+
+from app.validation import MAX_SESSION_ID_LENGTH, sanitize_id, validate_id
+
 
 class TestValidation(unittest.TestCase):
     def test_basic_id(self):

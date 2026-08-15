@@ -27,10 +27,10 @@ const BLOOM_MAP: Record<string, number> = {
 export default function QuizPage() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [courseCode, setCourseCode] = useState('');
-  const [topic, setTopic] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState('');
   const [count, setCount] = useState(10);
-  const [bloomLevels, setBloomLevels] = useState<number[]>([1, 3]);
+  const [selectedBloomLevels, setSelectedBloomLevels] = useState<number[]>([]);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -48,12 +48,7 @@ export default function QuizPage() {
     staleTime: 30_000,
   });
 
-  useEffect(() => {
-    if (courses.length > 0 && !courseCode) {
-      setCourseCode(courses[0].course_code);
-      setTopic(courses[0].course_name);
-    }
-  }, [courses]);
+  const courseCode = selectedCourse || courses[0]?.course_code || '';
 
   const { data: analyticsData } = useQuery({
     queryKey: ['analytics', courseCode],
@@ -62,14 +57,12 @@ export default function QuizPage() {
     staleTime: 30_000,
   });
 
-  useEffect(() => {
-    if (analyticsData?.bloom_mastery && Object.keys(analyticsData.bloom_mastery).length > 0) {
-      const weak = BLOOM_LEVELS
+  const weakBloomLevels = analyticsData?.bloom_mastery && Object.keys(analyticsData.bloom_mastery).length > 0
+    ? BLOOM_LEVELS
         .filter(bl => (analyticsData.bloom_mastery![bl.level] ?? 0) < 0.7)
-        .map(bl => bl.level);
-      if (weak.length > 0) setBloomLevels(weak);
-    }
-  }, [analyticsData]);
+        .map(bl => bl.level)
+    : [];
+  const bloomLevels = selectedBloomLevels.length > 0 ? selectedBloomLevels : weakBloomLevels;
 
   const { data: topics = [] } = useQuery({
     queryKey: ['topics', courseCode],
@@ -78,12 +71,7 @@ export default function QuizPage() {
     staleTime: 30_000,
   });
 
-  useEffect(() => {
-    const list = Array.isArray(topics) ? topics : [];
-    if (list.length > 0) {
-      setTopic(list[0].topic_name);
-    }
-  }, [topics]);
+  const topic = selectedTopic || (Array.isArray(topics) && topics.length > 0 ? topics[0].topic_name : '');
 
   const { data: savedQuizzes = [] } = useQuery({
     queryKey: ['quiz-saved', courseCode],
@@ -93,11 +81,11 @@ export default function QuizPage() {
   });
 
   const handleTopicChange = (value: string) => {
-    setTopic(value);
+    setSelectedTopic(value);
     const match = topics.find(t => t.topic_name === value);
     if (match) {
       const bl = BLOOM_MAP[match.bloom_level];
-      if (bl) setBloomLevels([bl]);
+      if (bl) setSelectedBloomLevels([bl]);
     }
   };
 
@@ -114,8 +102,7 @@ export default function QuizPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await quizApi.generate({ course_code: courseCode, topic, count, bloom_levels: bloomLevels.length ? bloomLevels : undefined });
-      setQuestions(data);
+      const data = await quizApi.generate({ course_code: courseCode, topic, count, bloom_levels: bloomLevels.length ? bloomLevels : undefined });      setQuestions(data);
       setCurrentIndex(0);
       setSelectedOption(null);
       setAnswered(false);
@@ -163,6 +150,14 @@ export default function QuizPage() {
   };
 
   const handlePracticeAgain = () => {
+    setCurrentIndex(0);
+    setSelectedOption(null);
+    setAnswered(false);
+    setShowResults(false);
+    setTimer(0);
+  };
+
+  const handleExitToBuilder = () => {
     setQuestions([]);
     setShowResults(false);
     setCurrentIndex(0);
@@ -171,8 +166,21 @@ export default function QuizPage() {
     setTimer(0);
   };
 
+  const handleRetake = (sq: SavedQuiz) => {
+    if (!sq.questions?.length) return;
+    const reset = sq.questions.map(q => ({ ...q, user_answer_index: -1, is_correct: false }));
+    setSelectedTopic(sq.topic);
+    if (sq.bloom_levels?.length) setSelectedBloomLevels(sq.bloom_levels);
+    setQuestions(reset);
+    setCurrentIndex(0);
+    setSelectedOption(null);
+    setAnswered(false);
+    setShowResults(false);
+    setTimer(0);
+  };
+
   const toggleBloom = (level: number) => {
-    setBloomLevels((prev) => prev.includes(level) ? prev.filter((l) => l !== level) : [...prev, level]);
+    setSelectedBloomLevels((prev) => prev.includes(level) ? prev.filter((l) => l !== level) : [...prev, level]);
   };
 
   const formatTime = (s: number) => {
@@ -205,7 +213,7 @@ export default function QuizPage() {
                 <div className={styles.courseGrid}>
                   {courses.map((c) => (
                     <label key={c.course_code} className={`${styles.courseOption} ${courseCode === c.course_code ? styles.courseOptionActive : ''}`}>
-                      <input type="radio" name="course" checked={courseCode === c.course_code} onChange={() => setCourseCode(c.course_code)} />
+                      <input type="radio" name="course" checked={courseCode === c.course_code} onChange={() => setSelectedCourse(c.course_code)} />
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
                           <span className={styles.courseCode}>{c.course_code}</span>
@@ -306,20 +314,43 @@ export default function QuizPage() {
                   </div>
                 </div>
                 <div className={styles.historyGrid}>
-                  {savedQuizzes.map((sq) => (
-                    <div key={sq.id} className={styles.historyCard}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <BarChart3 size={20} style={{ color: 'var(--color-primary)' }} />
+                  {savedQuizzes.map((sq) => {
+                    const sqPct = sq.total ? Math.round((sq.score / sq.total) * 100) : 0;
+                    return (
+                      <div key={sq.id} className={styles.historyCard}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', background: 'var(--color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <BarChart3 size={20} style={{ color: 'var(--color-primary)' }} />
+                          </div>
+                          <span className={sqPct >= 70 ? styles.badgeScore : styles.badgeError}>
+                            SCORE: {sqPct}%
+                          </span>
                         </div>
-                        <span className={sq.score >= 70 ? styles.badgeScore : styles.badgeError}>
-                          SCORE: {sq.score}%
-                        </span>
+                        <h4 style={{ fontWeight: 600, fontSize: 14 }}>{sq.topic}</h4>
+                        <p style={{ fontSize: 11, color: 'var(--color-on-surface-variant)', marginTop: 4 }}>{sq.course_code} • {new Date(sq.created_at).toLocaleDateString()}</p>
+                        <button
+                          onClick={() => handleRetake(sq)}
+                          disabled={!sq.questions?.length}
+                          style={{
+                            width: '100%',
+                            marginTop: 'var(--space-4)',
+                            padding: 'var(--space-2)',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--color-primary)',
+                            color: 'var(--color-primary)',
+                            background: 'transparent',
+                            fontWeight: 600,
+                            fontSize: 12,
+                            cursor: sq.questions?.length ? 'pointer' : 'not-allowed',
+                            opacity: sq.questions?.length ? 1 : 0.4,
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          Retake Quiz
+                        </button>
                       </div>
-                      <h4 style={{ fontWeight: 600, fontSize: 14 }}>{sq.topic}</h4>
-                      <p style={{ fontSize: 11, color: 'var(--color-on-surface-variant)', marginTop: 4 }}>{sq.course_code} • {new Date(sq.created_at).toLocaleDateString()}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}
@@ -465,6 +496,22 @@ export default function QuizPage() {
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-4)', padding: 'var(--space-8) 0' }}>
               <button
+                onClick={handleExitToBuilder}
+                style={{
+                  padding: 'var(--space-3) var(--space-8)',
+                  borderRadius: 'var(--radius-md)',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-on-surface-variant)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: 14,
+                }}
+              >
+                Exit to Builder
+              </button>
+              <button
                 onClick={handlePracticeAgain}
                 style={{
                   padding: 'var(--space-3) var(--space-8)',
@@ -478,7 +525,7 @@ export default function QuizPage() {
                   fontSize: 14,
                 }}
               >
-                Practice Again
+                Retake This Quiz
               </button>
               <button
                 onClick={handleSave}

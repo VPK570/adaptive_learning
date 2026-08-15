@@ -34,12 +34,14 @@ export const chatApi = {
       question: string; course_code: string; session_id: string;
       language?: string; mastery?: number; bloom_level?: number;
       top_k?: number; image_ids?: string[];
+      source_titles?: string[]; topics?: string[];
     },
     callbacks: {
       onThinking: (text: string) => void;
       onContent: (text: string) => void;
       onMetadata: (meta: Record<string, unknown>) => void;
       onDone: () => void;
+      onCancel: () => void;
       onError: (err: Error) => void;
     },
   ): { close: () => void; cancel: () => void; regenerate: () => void } => {
@@ -72,7 +74,7 @@ export const chatApi = {
         if (msg.type === 'thinking') { callbacks.onThinking(msg.content); }
         else if (msg.type === 'content') { callbacks.onContent(msg.content); }
         else if (msg.type === 'metadata') { callbacks.onMetadata(msg); }
-        else if (msg.type === 'done') { cleanup(); callbacks.onDone(); }
+        else if (msg.type === 'done') { callbacks.onDone(); }
         else if (msg.type === 'error') { cleanup(); callbacks.onError(new Error(msg.content)); }
       } catch {}
     };
@@ -87,7 +89,7 @@ export const chatApi = {
 
     return {
       close: cleanup,
-      cancel: () => send({ type: 'cancel' }),
+      cancel: () => { send({ type: 'cancel' }); callbacks.onCancel(); },
       regenerate: () => send({ type: 'regenerate' }),
     };
   },

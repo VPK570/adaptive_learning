@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import AppShell from '@/app/components/AppShell';
 import StatTile from '@/app/components/StatTile';
@@ -11,10 +11,6 @@ import type { Course, Analytics } from '@/lib/api/types';
 import styles from './Progress.module.css';
 
 export default function LearningProgress() {
-  const [weakTopics, setWeakTopics] = useState<string[]>([]);
-  const [revisionItems, setRevisionItems] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const { data: courses = [] } = useQuery({
     queryKey: ['courses'],
     queryFn: ({ signal }) => coursesApi.list(signal),
@@ -29,21 +25,33 @@ export default function LearningProgress() {
     })),
   });
 
-  useEffect(() => {
+  const { weakTopics, revisionItems, loading } = useMemo(() => {
     const topics: string[] = [];
     const revisions: string[] = [];
     analyticsResults.forEach(result => {
       if (result.data?.weak_topics) topics.push(...result.data.weak_topics);
       if (result.data?.suggested_revision) revisions.push(...result.data.suggested_revision);
     });
-    setWeakTopics([...new Set(topics)]);
-    setRevisionItems([...new Set(revisions)]);
-    setLoading(analyticsResults.length > 0 && analyticsResults.some(r => r.isLoading));
+    return {
+      weakTopics: [...new Set(topics)],
+      revisionItems: [...new Set(revisions)],
+      loading: analyticsResults.length > 0 && analyticsResults.some(r => r.isLoading),
+    };
   }, [analyticsResults]);
 
+  const { data: stats } = useQuery({
+    queryKey: ['my-stats'],
+    queryFn: ({ signal }) => analyticsApi.getMyStats(signal),
+    staleTime: 30_000,
+  });
+
+  const overallPct = stats?.courses.length
+    ? Math.round(stats.courses.reduce((s, c) => s + c.overall_mastery, 0) / stats.courses.length * 100)
+    : 0;
+
   const statTiles = [
-    { icon: 'Award', value: '—', label: 'Overall Mastery', accent: 'primary' as const },
-    { icon: 'Clock', value: '—', label: 'Study Time', accent: 'secondary' as const },
+    { icon: 'Award', value: String(overallPct) + '%', label: 'Overall Mastery', accent: 'primary' as const },
+    { icon: 'Clock', value: String(stats?.active_days ?? 0), label: 'Active Days', accent: 'secondary' as const },
     { icon: 'BookOpen', value: String(courses.length || '—'), label: 'Courses Enrolled', accent: 'tertiary' as const },
   ];
 

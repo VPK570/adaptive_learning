@@ -10,12 +10,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 
 from app.auth import (
-    hash_password,
-    verify_password,
+    VALID_ROLES,
+    _create_user,
     create_access_token,
     get_user_by_email,
-    _create_user,
-    VALID_ROLES,
+    hash_password,
+    verify_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])

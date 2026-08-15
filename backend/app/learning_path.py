@@ -7,7 +7,7 @@ class TopicPrerequisiteGraph:
     async def get_graph(self, course_code: str) -> dict[str, set[str]]:
         db = await get_db()
         rows = await db.query(
-            "SELECT * FROM topic_prerequisite WHERE course_code = $cc AND prereq_type = 'hard'",
+            "SELECT * FROM topic_prerequisite WHERE course_code = $cc AND prereq_type IN ['hard', 'sequential']",
             {"cc": course_code},
         )
         graph: dict[str, set[str]] = {}
@@ -63,7 +63,7 @@ class TopicPrerequisiteGraph:
     async def get_prerequisites(self, course_code: str, topic_id: str) -> list[str]:
         db = await get_db()
         rows = await db.query(
-            "SELECT topic_from FROM topic_prerequisite WHERE course_code = $cc AND topic_to = $tid AND prereq_type = 'hard'",
+            "SELECT topic_from FROM topic_prerequisite WHERE course_code = $cc AND topic_to = $tid AND prereq_type IN ['hard', 'sequential']",
             {"cc": course_code, "tid": topic_id},
         )
         return [r["topic_from"] for r in (rows or []) if r.get("topic_from")]

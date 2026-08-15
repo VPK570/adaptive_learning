@@ -13,12 +13,11 @@ export default function StudentProfile() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    usersApi.getMe().then(setProfile);
+    usersApi.getMe().then(p => {
+      setProfile(p);
+      setName(p.name);
+    });
   }, []);
-
-  useEffect(() => {
-    if (profile) setName(profile.name);
-  }, [profile]);
 
   const handleSave = async () => {
     setSaving(true);

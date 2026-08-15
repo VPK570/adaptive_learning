@@ -195,27 +195,11 @@ class ProviderRouter:
 
     @staticmethod
     def _extract_chat_content(data: dict) -> str:
-        choices = data.get("choices")
-        if not choices or not isinstance(choices, list) or len(choices) == 0:
-            logger.warning("chat: response has no choices array — keys=%s", list(data.keys()))
-            return ""
-        choice = choices[0]
-        if not isinstance(choice, dict):
-            logger.warning("chat: choices[0] is not a dict — type=%s", type(choice).__name__)
-            return ""
-        message = choice.get("message")
-        if not isinstance(message, dict):
-            logger.info("chat: choice has no message dict — finish_reason=%s",
-                        choice.get("finish_reason", "unknown"))
-            return ""
-        content = message.get("content")
+        content = data.get("choices", [{}])[0].get("message", {}).get("content")
         if content is None:
-            logger.info("chat: message has no content key — finish_reason=%s",
-                        choice.get("finish_reason", "unknown"))
+            logger.info("chat: no content in response — keys=%s", list(data.keys()))
             return ""
-        if not isinstance(content, str):
-            content = str(content)
-        return content
+        return content if isinstance(content, str) else str(content)
 
     def _resolve_chat_provider(self, model: str | None) -> tuple:
         if model and "/" in model:

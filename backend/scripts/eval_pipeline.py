@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 async def run_eval(pdf_path: str, course_code: str, query_text: str, skip_eval: bool = False):
-    from app.rag import RAGPipeline
-    from app.query_engine import QueryEngine
     from app.evaluator import RAGASEvaluator
+    from app.query_engine import QueryEngine
+    from app.rag import RAGPipeline
 
     doc_title = Path(pdf_path).stem.replace("-", " ").replace("_", " ")
 

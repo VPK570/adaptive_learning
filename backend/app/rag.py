@@ -42,11 +42,12 @@ class RAGPipeline:
         if not raw_chunks:
             return {"chunks_ingested": 0, "error": "No content to chunk"}
 
-        chunk_texts = [ct for ct, _, _ in raw_chunks if ct.strip()]
+        valid_chunks = [(ct, s, e) for ct, s, e in raw_chunks if ct.strip()]
 
-        if not chunk_texts:
+        if not valid_chunks:
             return {"chunks_ingested": 0, "error": "No non-empty chunks to embed"}
 
+        chunk_texts = [ct for ct, _, _ in valid_chunks]
         embeddings = await client.embed_text_batch(chunk_texts)
         db = await get_db()
 
@@ -55,10 +56,7 @@ class RAGPipeline:
         from app.chunker import extract_page_for_chunk
 
         chunks_to_insert = []
-        for i, (text_chunk, start, end) in enumerate(raw_chunks):
-            if not text_chunk.strip():
-                continue
-
+        for (text_chunk, start, end), emb in zip(valid_chunks, embeddings):
             page_num = extract_page_for_chunk(text_chunk, cleaned, start)
 
             # Clean markers from the chunk text before storing
@@ -72,7 +70,7 @@ class RAGPipeline:
                 "topic": topic,
                 "page": page_num,
                 "text": text_chunk_clean,
-                "embedding": embeddings[i],
+                "embedding": emb,
                 "content_type": "text",
                 **(metadata or {}),
             }
@@ -173,12 +171,16 @@ class RAGPipeline:
                 "status": "already_ingested", "doc_id": str(existing_id),
             }
 
-        from app.pdf_extractor import extract_all_pages, detect_sections
-        from app.topics import (
-            classify_sections_llm, classify_sections_embedding,
-            resolve_topic_boundaries, extract_extra_topics_llm, get_course_topics
-        )
         from app.chunker import chunk_by_topic_regions
+        from app.pdf_extractor import detect_sections, extract_all_pages
+        from app.topics import (
+            classify_sections_embedding,
+            classify_sections_fallback,
+            classify_sections_llm,
+            extract_extra_topics_llm,
+            get_course_topics,
+            resolve_topic_boundaries,
+        )
 
         pages_content = await extract_all_pages(filepath)
 
@@ -206,6 +208,11 @@ class RAGPipeline:
                     classifications = await classify_sections_embedding(sections, course_code)
                 except Exception:
                     logger.warning("classify_sections_embedding failed", exc_info=True)
+            if classifications is None:
+                try:
+                    classifications = await classify_sections_fallback(sections, course_code)
+                except Exception:
+                    logger.warning("classify_sections_fallback failed", exc_info=True)
 
         if classifications:
             topic_regions = resolve_topic_boundaries(sections, classifications)
@@ -230,16 +237,22 @@ class RAGPipeline:
                 topic_groups.setdefault(chunk.topic, []).append(chunk)
 
             for topic_name, chunk_group in topic_groups.items():
-                texts = [c.text for c in chunk_group if c.text.strip()]
+                valid_chunks = [c for c in chunk_group if c.text.strip()]
+                texts = [c.text for c in valid_chunks]
                 if not texts:
                     continue
                 try:
                     embeddings = await client.embed_text_batch(texts)
                 except Exception:
-                    logger.warning("embed_text_batch failed", exc_info=True)
-                    embeddings = [None] * len(texts)
+                    logger.warning("embed_text_batch failed — per-chunk fallback", exc_info=True)
+                    embeddings = []
+                    for t in texts:
+                        try:
+                            embeddings.append(await client.embed_text(t))
+                        except Exception:
+                            embeddings.append(None)
 
-                for chunk, emb in zip(chunk_group, embeddings):
+                for chunk, emb in zip(valid_chunks, embeddings):
                     if emb is None:
                         continue
                     chunks_to_insert.append({
@@ -332,16 +345,28 @@ class RAGPipeline:
 
         # Store document record
         from datetime import datetime
-        result = await db.query(
-            "INSERT INTO document $doc RETURN id",
-            {"doc": {
-                "course_code": course_code, "filename": document_title,
-                "content_hash": content_hash, "doc_type": "material",
-                "created_at": datetime.now().isoformat(),
-                "file_path": filepath, "file_url": file_url,
-                "file_size": file_size, "topic_analysis": topic_analysis,
-            }}
-        )
+        try:
+            result = await db.query(
+                "INSERT INTO document $doc RETURN id",
+                {"doc": {
+                    "course_code": course_code, "filename": document_title,
+                    "content_hash": content_hash, "doc_type": "material",
+                    "created_at": datetime.now().isoformat(),
+                    "file_path": filepath, "file_url": file_url,
+                    "file_size": file_size, "topic_analysis": topic_analysis,
+                }}
+            )
+        except Exception:
+            # Cleanup orphaned chunks on failure
+            await db.query(
+                "DELETE text_chunk WHERE course_code = $code AND source_title = $title",
+                {"code": course_code, "title": document_title},
+            )
+            await db.query(
+                "DELETE image_chunk WHERE course_code = $code AND source_title = $title",
+                {"code": course_code, "title": document_title},
+            )
+            raise
         doc_id = str(result[0]["id"]) if result and len(result) > 0 else None
 
         return {
@@ -359,6 +384,8 @@ class RAGPipeline:
         top_k: int | None = None,
         topic: str | None = None,
         content_type: str | None = None,
+        source_titles: list[str] | None = None,
+        topics: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         k = top_k or self.top_k
         db = await get_db()
@@ -380,6 +407,12 @@ class RAGPipeline:
             if topic:
                 vector_query += " AND topic = $topic"
                 v_params["topic"] = topic
+            if source_titles:
+                vector_query += " AND source_title IN $sources"
+                v_params["sources"] = source_titles
+            if topics:
+                vector_query += " AND topic IN $topics_list"
+                v_params["topics_list"] = topics
 
             vector_hits = await db.query(vector_query, v_params)
             if not isinstance(vector_hits, list):
@@ -404,6 +437,12 @@ class RAGPipeline:
                 if topic:
                     curr_query += " AND topic = $topic"
                     c_params["topic"] = topic
+                if source_titles:
+                    curr_query += " AND source_title IN $sources"
+                    c_params["sources"] = source_titles
+                if topics:
+                    curr_query += " AND topic IN $topics_list"
+                    c_params["topics_list"] = topics
 
                 curr_hits = await db.query(curr_query, c_params)
                 if not isinstance(curr_hits, list):
@@ -464,13 +503,27 @@ class RAGPipeline:
             for r in docs_curr:
                 curr_doc_names.add(r["source_title"])
 
+        doc_rows = await db.query(
+            "SELECT filename, file_url, file_size, doc_type, topic_analysis FROM document WHERE course_code = $code",
+            {"code": course_code},
+        ) or []
+        documents = [{
+            "name": r["filename"],
+            "file_url": r.get("file_url"),
+            "file_size": r.get("file_size"),
+            "doc_type": r.get("doc_type"),
+            "topic_analysis": r.get("topic_analysis"),
+        } for r in doc_rows if r.get("filename")]
+        if not documents:
+            documents = [{"name": name} for name in sorted(all_doc_names)]
+
         return {
             "course_code": course_code,
             "total_chunks": text_chunks + image_chunks,
             "text_chunks": text_chunks,
             "image_chunks": image_chunks,
             "topics": [{"topic": r["topic"], "chunks": r["count"]} for r in (topics_res if isinstance(topics_res, list) else []) if r.get("topic")],
-            "documents": [{"name": name} for name in all_doc_names],
+            "documents": documents,
             "curriculum_docs": [{"name": name} for name in curr_doc_names],
         }
 
@@ -492,7 +545,26 @@ class RAGPipeline:
         for cc in course_codes:
             tc = text_counts.get(cc, 0)
             ic = img_counts.get(cc, 0)
-            result[cc] = {"total_chunks": tc + ic, "chunk_count": tc + ic, "documents": []}
+            # Query document table for actual document counts
+            doc_res = await db.query(
+                "SELECT course_code, count() as doc_count FROM document WHERE course_code = $code GROUP BY course_code",
+                {"code": cc},
+            ) or []
+            dc = doc_res[0]["doc_count"] if doc_res else 0
+            qres = await db.query(
+                "SELECT count() AS c FROM query_log WHERE course_code = $code GROUP ALL",
+                {"code": cc},
+            ) or []
+            total_queries = qres[0]["c"] if qres else 0
+            uids = set()
+            for tbl, col in (("query_log", "user_id"), ("quiz", "user_id"), ("knowledge_state", "student_id")):
+                r = await db.query(
+                    f"SELECT {col} AS uid FROM {tbl} WHERE course_code = $code GROUP BY {col}",
+                    {"code": cc},
+                ) or []
+                uids |= {row["uid"] for row in r if row.get("uid")}
+            result[cc] = {"total_chunks": tc + ic, "chunk_count": tc + ic, "doc_count": dc,
+                          "student_count": len(uids), "total_queries": total_queries}
         return result
 
     async def delete_course(self, course_code: str) -> int:

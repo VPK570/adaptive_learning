@@ -103,7 +103,6 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           setUploadingFiles(prev => prev.map(f =>
             f.id === fileId ? { ...f, status: 'processing', progress: 100, taskId: data.task_id } : f
           ));
-          queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
           // Poll for task completion
           const poll = setInterval(async () => {
             try {
@@ -112,11 +111,19 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
                 clearInterval(poll);
                 setTopicAnalysis(result.result.topic_analysis);
                 setAnalysisDocId(fileId);
+                // Refresh stats after successful processing
+                queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
               } else if (result.status === 'FAILURE') {
                 clearInterval(poll);
+                setUploadingFiles(prev => prev.map(f =>
+                  f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
+                ));
               }
             } catch {
               clearInterval(poll);
+              setUploadingFiles(prev => prev.map(f =>
+                f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
+              ));
             }
           }, 2000);
         })
@@ -150,12 +157,30 @@ export default function UploadMaterials({ params }: { params: Promise<{ code: st
           ));
         },
       )
-        .then(() => {
+        .then((data: { task_id: string; status: string }) => {
           setUploadingFiles(prev => prev.map(f =>
-            f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
+            f.id === fileId ? { ...f, status: 'processing', progress: 100, taskId: data.task_id } : f
           ));
-          queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
-          queryClient.invalidateQueries({ queryKey: ['topics', courseCode] });
+          const poll = setInterval(async () => {
+            try {
+              const result = await ingestionApi.pollTask(data.task_id);
+              if (result.status === 'SUCCESS') {
+                clearInterval(poll);
+                queryClient.invalidateQueries({ queryKey: ['stats', courseCode] });
+                queryClient.invalidateQueries({ queryKey: ['topics', courseCode] });
+              } else if (result.status === 'FAILURE') {
+                clearInterval(poll);
+                setUploadingFiles(prev => prev.map(f =>
+                  f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
+                ));
+              }
+            } catch {
+              clearInterval(poll);
+              setUploadingFiles(prev => prev.map(f =>
+                f.id === fileId ? { ...f, status: 'error', progress: 0 } : f
+              ));
+            }
+          }, 2000);
         })
         .catch(() => {
           setUploadingFiles(prev => prev.map(f =>

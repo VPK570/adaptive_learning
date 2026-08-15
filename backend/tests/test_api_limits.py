@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
-from server import app
-from app.validation import MAX_FILE_SIZE
+
 from app.auth import create_access_token
+from app.validation import MAX_FILE_SIZE
+from server import app
 
 client = TestClient(app)
 

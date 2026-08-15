@@ -3,8 +3,8 @@
 from fastapi import APIRouter, Depends
 
 from app.auth import get_current_user_from_request
-from app.validation import validate_course_code
 from app.learning_path import TopicPrerequisiteGraph
+from app.validation import validate_course_code
 
 router = APIRouter()
 

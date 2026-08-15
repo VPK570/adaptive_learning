@@ -148,7 +148,8 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS subtopics[*] ON TABLE course_topic TYPE string;
             DEFINE FIELD IF NOT EXISTS prerequisites ON TABLE course_topic TYPE array;
             DEFINE FIELD IF NOT EXISTS prerequisites[*] ON TABLE course_topic TYPE string;
-            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE course_topic TYPE option<string>;
+            REMOVE FIELD IF EXISTS bloom_level ON TABLE course_topic;
+            DEFINE FIELD bloom_level ON TABLE course_topic TYPE option<string>;
             DEFINE FIELD IF NOT EXISTS learning_objectives ON TABLE course_topic TYPE array;
             DEFINE FIELD IF NOT EXISTS learning_objectives[*] ON TABLE course_topic TYPE string;
             DEFINE FIELD IF NOT EXISTS order_index ON TABLE course_topic TYPE number;
@@ -216,15 +217,20 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS score ON TABLE quiz TYPE int;
             DEFINE FIELD IF NOT EXISTS total ON TABLE quiz TYPE int;
             DEFINE FIELD IF NOT EXISTS created_at ON TABLE quiz TYPE datetime DEFAULT time::now();
-            DEFINE FIELD IF NOT EXISTS completed_at ON TABLE quiz TYPE datetime;
+            REMOVE FIELD IF EXISTS completed_at ON TABLE quiz;
+            DEFINE FIELD completed_at ON TABLE quiz TYPE option<datetime>;
             DEFINE INDEX IF NOT EXISTS quiz_course_idx ON TABLE quiz FIELDS course_code;
 
             DEFINE TABLE IF NOT EXISTS flashcard_set SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS user_id ON TABLE flashcard_set TYPE string;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE flashcard_set TYPE string;
             DEFINE FIELD IF NOT EXISTS topic ON TABLE flashcard_set TYPE string;
-            DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE flashcard_set TYPE option<int>;
+            REMOVE FIELD IF EXISTS bloom_level ON TABLE flashcard_set;
+            DEFINE FIELD bloom_level ON TABLE flashcard_set TYPE option<int>;
             DEFINE FIELD IF NOT EXISTS cards ON TABLE flashcard_set TYPE any;
+            DEFINE FIELD IF NOT EXISTS times_studied ON TABLE flashcard_set TYPE int DEFAULT 0;
+            DEFINE FIELD IF NOT EXISTS best_recall ON TABLE flashcard_set TYPE option<int>;
+            DEFINE FIELD IF NOT EXISTS last_recall ON TABLE flashcard_set TYPE option<int>;
             DEFINE FIELD IF NOT EXISTS created_at ON TABLE flashcard_set TYPE datetime DEFAULT time::now();
             DEFINE INDEX IF NOT EXISTS flashcard_course_idx ON TABLE flashcard_set FIELDS course_code;
 
@@ -242,6 +248,21 @@ class SurrealDBManager:
                 DELETE topic_prerequisite WHERE course_code = $before.course_code;
             }};
 
+            DEFINE TABLE IF NOT EXISTS integrity_log SCHEMAFULL;
+            DEFINE FIELD IF NOT EXISTS course_code ON TABLE integrity_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS query ON TABLE integrity_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS answer_type ON TABLE integrity_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS leakage_score ON TABLE integrity_log TYPE float;
+            DEFINE FIELD IF NOT EXISTS leakage_directness ON TABLE integrity_log TYPE float;
+            DEFINE FIELD IF NOT EXISTS leakage_procedural ON TABLE integrity_log TYPE float;
+            DEFINE FIELD IF NOT EXISTS leakage_completeness ON TABLE integrity_log TYPE float;
+            DEFINE FIELD IF NOT EXISTS leakage_specificity ON TABLE integrity_log TYPE float;
+            DEFINE FIELD IF NOT EXISTS redacted ON TABLE integrity_log TYPE bool;
+            DEFINE FIELD IF NOT EXISTS original_response ON TABLE integrity_log TYPE string;
+            DEFINE FIELD IF NOT EXISTS redacted_response ON TABLE integrity_log TYPE option<string>;
+            DEFINE FIELD IF NOT EXISTS timestamp ON TABLE integrity_log TYPE datetime DEFAULT time::now();
+            DEFINE INDEX IF NOT EXISTS integrity_log_course_idx ON TABLE integrity_log FIELDS course_code;
+
             DEFINE TABLE IF NOT EXISTS knowledge_state SCHEMAFULL;
             DEFINE FIELD IF NOT EXISTS student_id ON TABLE knowledge_state TYPE string;
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE knowledge_state TYPE string;
@@ -249,13 +270,17 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE knowledge_state TYPE int;
             DEFINE FIELD IF NOT EXISTS mastery_score ON TABLE knowledge_state TYPE float;
             DEFINE FIELD IF NOT EXISTS confidence ON TABLE knowledge_state TYPE float;
-            DEFINE FIELD IF NOT EXISTS stability ON TABLE knowledge_state TYPE option<float>;
-            DEFINE FIELD IF NOT EXISTS difficulty ON TABLE knowledge_state TYPE option<float>;
+            REMOVE FIELD IF EXISTS stability ON TABLE knowledge_state;
+            DEFINE FIELD stability ON TABLE knowledge_state TYPE option<float>;
+            REMOVE FIELD IF EXISTS difficulty ON TABLE knowledge_state;
+            DEFINE FIELD difficulty ON TABLE knowledge_state TYPE option<float>;
             DEFINE FIELD IF NOT EXISTS total_attempts ON TABLE knowledge_state TYPE int;
             DEFINE FIELD IF NOT EXISTS correct_attempts ON TABLE knowledge_state TYPE int;
             DEFINE FIELD IF NOT EXISTS streak ON TABLE knowledge_state TYPE int;
-            DEFINE FIELD IF NOT EXISTS last_reviewed_at ON TABLE knowledge_state TYPE option<datetime>;
-            DEFINE FIELD IF NOT EXISTS next_review_at ON TABLE knowledge_state TYPE option<datetime>;
+            REMOVE FIELD IF EXISTS last_reviewed_at ON TABLE knowledge_state;
+            DEFINE FIELD last_reviewed_at ON TABLE knowledge_state TYPE option<datetime>;
+            REMOVE FIELD IF EXISTS next_review_at ON TABLE knowledge_state;
+            DEFINE FIELD next_review_at ON TABLE knowledge_state TYPE option<datetime>;
             DEFINE FIELD IF NOT EXISTS updated_at ON TABLE knowledge_state TYPE datetime DEFAULT time::now();
             DEFINE INDEX IF NOT EXISTS ks_student_course ON TABLE knowledge_state FIELDS student_id, course_code, topic_id, bloom_level UNIQUE;
 
@@ -271,7 +296,8 @@ class SurrealDBManager:
             DEFINE FIELD IF NOT EXISTS course_code ON TABLE question_log TYPE string;
             DEFINE FIELD IF NOT EXISTS topic_id ON TABLE question_log TYPE string;
             DEFINE FIELD IF NOT EXISTS bloom_level ON TABLE question_log TYPE int;
-            DEFINE FIELD IF NOT EXISTS question_text ON TABLE question_log TYPE option<string>;
+            REMOVE FIELD IF EXISTS question_text ON TABLE question_log;
+            DEFINE FIELD question_text ON TABLE question_log TYPE option<string>;
             DEFINE FIELD IF NOT EXISTS is_correct ON TABLE question_log TYPE bool;
             DEFINE FIELD IF NOT EXISTS source ON TABLE question_log TYPE string;
             DEFINE FIELD IF NOT EXISTS timestamp ON TABLE question_log TYPE datetime DEFAULT time::now();

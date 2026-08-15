@@ -10,9 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 load_dotenv()
 
@@ -34,22 +34,26 @@ logging.basicConfig(
     force=True,
 )
 
+from app.auth import decode_token  # noqa: E402
 from app.config import settings  # noqa: E402
-from app.rag import RAGPipeline  # noqa: E402
-from app.query_engine import QueryEngine  # noqa: E402
 from app.curriculum import CurriculumManager  # noqa: E402
 from app.knowledge_state import KnowledgeStateManager  # noqa: E402
+from app.query_engine import QueryEngine  # noqa: E402
+from app.rag import RAGPipeline  # noqa: E402
+from app.routers import admin as admin_routes  # noqa: E402
+from app.routers import analytics, chat, courses, flashcards, images, ingestion, paper, query, quiz  # noqa: E402
+from app.routers import auth as auth_routes
+from app.routers import learning_path as learning_path_routes
+from app.routers import tasks as tasks_routes
+from app.routers import users as users_routes
 from app.validation import MAX_FILE_SIZE  # noqa: E402
-from app.auth import decode_token  # noqa: E402
-from app.routers import ingestion, query, courses, chat, flashcards, quiz, paper, analytics, images, auth as auth_routes  # noqa: E402
-from app.routers import admin as admin_routes, users as users_routes, learning_path as learning_path_routes, tasks as tasks_routes  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.auth import hash_password, _create_user, get_user_by_email
+    from app.auth import _create_user, get_user_by_email, hash_password
     from app.db import SurrealDBManager
     await SurrealDBManager.get_db()
 
@@ -109,7 +113,7 @@ async def limit_upload_size(request: Request, call_next):
     return await call_next(request)
 
 
-PUBLIC_PREFIXES = ("/auth", "/health", "/docs", "/openapi.json", "/redoc", "/pdfs")
+PUBLIC_PREFIXES = ("/auth", "/health", "/healthz", "/docs", "/openapi.json", "/redoc", "/pdfs", "/tasks")
 
 
 @app.middleware("http")
@@ -164,6 +168,7 @@ app.include_router(learning_path_routes.router, prefix="/api")
 app.include_router(tasks_routes.router)
 
 import os
+
 _pdfs_dir = os.environ.get("PDFS_DIR", os.path.join(os.path.dirname(__file__), "storage", "pdfs"))
 os.makedirs(_pdfs_dir, exist_ok=True)
 app.mount("/pdfs", StaticFiles(directory=_pdfs_dir), name="pdfs")

@@ -60,3 +60,12 @@ docker compose up -d surrealdb redis
 - **Login format:** frontend sends `application/x-www-form-urlencoded` to `/auth/login`, not JSON. Backend uses `OAuth2PasswordRequestForm`.
 - **Docker backend** expects SurrealDB at `ws://surrealdb:8000/rpc` and Redis at `redis:6379` (compose env vars).
 - **`new_frontend/CLAUDE.md`** just contains `@AGENTS.md` (include directive); `new_frontend/AGENTS.md` has a Next.js 16 breaking-changes warning — heed it.
+
+## Knowledge Graph
+
+**Always use graphify** to answer questions, edit code, or review changes. Before touching any file, run `graphify query "<question>"` against `graphify-out/graph.json` to understand relationships, dependencies, and affected modules. This avoids breaking cross-community connections.
+
+- `graph.html` — interactive visualization (open in browser)
+- `GRAPH_REPORT.md` — audit report with god nodes, surprising connections, community labels
+- `graph.json` — raw graph data for programmatic access
+- Rebuild with `/graphify` after significant code changes

@@ -4,10 +4,10 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-from fastapi import WebSocket, WebSocketDisconnect
 
+from app.analytics import get_course_mastery
 from app.auth import get_current_user_from_request
 from app.deps import get_engine, get_knowledge_state, get_rag
 from app.knowledge_state import KnowledgeStateManager
@@ -169,6 +169,10 @@ async def query_ws(
             full_response = ""
             metadata = {}
 
+            mastery = data.get("mastery")
+            if mastery is None:
+                mastery = await get_course_mastery(user.get("email", ""), data.get("course_code", ""))
+
             try:
                 history = await get_course_history(
                     data.get("course_code", ""),
@@ -196,11 +200,13 @@ async def query_ws(
                     course_code=data.get("course_code", ""),
                     course_name=data.get("course_code", ""),
                     language=data.get("language", "English"),
-                    mastery=data.get("mastery"),
+                    mastery=mastery,
                     bloom_level=data.get("bloom_level"),
                     history=history,
                     top_k=data.get("top_k", 5),
                     images=image_data,
+                    source_titles=data.get("source_titles", []),
+                    topics=data.get("topics", []),
                 ):
                     if cancel_event.is_set():
                         break
@@ -264,6 +270,8 @@ async def query_stream(
 
     image_data = _load_images(body.image_ids)
 
+    mastery = body.mastery if body.mastery is not None else await get_course_mastery(user_email, course_code)
+
     async def stream_generator():
         full_response = ""
         metadata = {}
@@ -274,11 +282,13 @@ async def query_stream(
             course_code=course_code,
             course_name=course_code,
             language=body.language,
-            mastery=body.mastery,
+            mastery=mastery,
             bloom_level=body.bloom_level,
             history=history,
             top_k=body.top_k,
             images=image_data or None,
+            source_titles=body.source_titles,
+            topics=body.topics,
         ):
             chunk_count += 1
             ctype = chunk["type"]
@@ -327,16 +337,20 @@ async def query(
 
     image_data = _load_images(body.image_ids)
 
+    mastery = body.mastery if body.mastery is not None else await get_course_mastery(user_email, course_code)
+
     result = await engine.query(
         query=question,
         course_code=course_code,
         course_name=course_code,
         language=body.language,
-        mastery=body.mastery,
+        mastery=mastery,
         bloom_level=body.bloom_level,
         history=history,
         top_k=body.top_k,
         images=image_data or None,
+        source_titles=body.source_titles,
+        topics=body.topics,
     )
 
     from app.db import get_db

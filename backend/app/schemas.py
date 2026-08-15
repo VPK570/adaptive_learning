@@ -22,6 +22,8 @@ class QueryRequest(BaseModel):
     mastery: float | None = Field(None, ge=0.0, le=1.0)
     bloom_level: int | None = Field(None, ge=1, le=6)
     image_ids: list[str] = Field(default_factory=list, max_length=5)
+    source_titles: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
 
 
 class QueryResponse(BaseModel):
@@ -74,6 +76,11 @@ class SaveFlashcardRequest(BaseModel):
     course_code: str = Field(..., max_length=MAX_COURSE_CODE_LENGTH)
     topic: str = Field(..., max_length=MAX_TOPIC_LENGTH)
     cards: list[dict]
+
+
+class RecordFlashcardRequest(BaseModel):
+    known_count: int = Field(..., ge=0)
+    total: int = Field(..., ge=1)
 
 
 class ChatFeedbackRequest(BaseModel):

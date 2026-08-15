@@ -85,7 +85,7 @@ class CurriculumManager:
 
             # Extract structured topics from syllabus text
             try:
-                from app.topics import extract_topics_from_syllabus, store_course_topics, embed_course_topics
+                from app.topics import embed_course_topics, extract_topics_from_syllabus, store_course_topics
                 full_syllabus = "\n\n".join(documents)
                 topics = await extract_topics_from_syllabus(full_syllabus)
                 await store_course_topics(course_code, topics)

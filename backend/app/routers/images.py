@@ -3,7 +3,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Form, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.validation import MAX_IMAGE_SIZE, sanitize_id

@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from app.db import SurrealDBManager
 from app.topics import get_topic_coverage
@@ -8,6 +8,119 @@ from app.validation import (
     sanitize_text,
     validate_course_code,
 )
+
+
+def _compute_streak(days: list[date]) -> int:
+    """Length of trailing run of consecutive dates (deduped, caller-normalized to UTC date)."""
+    unique = sorted({d for d in days if d is not None})
+    if not unique:
+        return 0
+    streak, ref = 1, unique[-1]
+    for d in reversed(unique[:-1]):
+        if ref - d == timedelta(days=1):
+            streak += 1
+            ref = d
+        else:
+            break
+    return streak
+
+
+async def get_course_mastery(user_email: str, course_code: str) -> float:
+    db = await SurrealDBManager.get_db()
+    rows = await db.query(
+        "SELECT mastery_score FROM knowledge_state WHERE student_id = $sid AND course_code = $cc",
+        {"sid": user_email, "cc": course_code},
+    )
+    if not rows:
+        return 0.0
+    return round(sum(r.get("mastery_score", 0.0) for r in rows) / len(rows), 3)
+
+
+async def get_student_stats(user_email: str) -> dict:
+    db = await SurrealDBManager.get_db()
+    courses_res = await db.query("SELECT * FROM course ORDER BY created_at DESC")
+    course_codes = [r["course_code"] for r in courses_res] if courses_res else []
+
+    course_stats = []
+    total_quizzes = 0
+    for cc in course_codes:
+        mastery = await get_course_mastery(user_email, cc)
+        quiz_res = await db.query(
+            "SELECT count() AS cnt FROM quiz WHERE user_id = $uid AND course_code = $cc GROUP ALL",
+            {"uid": user_email, "cc": cc},
+        )
+        quizzes = quiz_res[0]["cnt"] if quiz_res else 0
+        total_quizzes += quizzes
+        course_stats.append({"course_code": cc, "overall_mastery": mastery, "quizzes_taken": quizzes})
+
+    activity_dates: list[date] = []
+    for table, col in (("query_log", "user_id"), ("question_log", "student_id")):
+        res = await db.query(f"SELECT timestamp FROM {table} WHERE {col} = $uid", {"uid": user_email})
+        for r in res or []:
+            ts = r.get("timestamp")
+            if ts:
+                try:
+                    activity_dates.append(datetime.fromisoformat(str(ts).replace("Z", "+00:00")).date())
+                except (ValueError, TypeError):
+                    pass
+
+    return {
+        "courses": course_stats,
+        "total_quizzes": total_quizzes,
+        "current_streak": _compute_streak(activity_dates),
+        "active_days": len({d for d in activity_dates}),
+    }
+
+
+async def get_student_course_map(user_email: str, course_code: str) -> dict:
+    from app.knowledge_state import KnowledgeStateManager
+    from app.learning_path import TopicPrerequisiteGraph
+    from app.topics import get_course_topics
+
+    ksm = KnowledgeStateManager()
+    states = await ksm.get_student_course_states(user_email, course_code)
+
+    topic_mastery: dict[str, float] = {}
+    topic_attempts: dict[str, int] = {}
+    for s in states:
+        tid = s.get("topic_id", "")
+        if tid:
+            # max, not weighted — matches ZPD candidate logic (learning_path.py:31);
+            # can overstate mastery on partially-attempted topics
+            topic_mastery[tid] = max(topic_mastery.get(tid, 0.0), s.get("mastery_score", 0.0))
+            topic_attempts[tid] = topic_attempts.get(tid, 0) + (s.get("total_attempts", 0) or 0)
+
+    topic_list = []
+    for t in await get_course_topics(course_code):
+        name = t["topic_name"]
+        mastery = round(topic_mastery.get(name, 0.0), 3)
+        status = "mastered" if mastery >= 0.7 else "in_progress" if mastery > 0 else "not_started"
+        topic_list.append({
+            "topic_id": name,
+            "topic_name": name,
+            "mastery_score": mastery,
+            "bloom_level": t.get("bloom_level", "Remember"),
+            "prerequisites": t.get("prerequisites", []),
+            "status": status,
+            "attempts": topic_attempts.get(name, 0),
+        })
+
+    graph = TopicPrerequisiteGraph()
+    candidates = await graph.get_zpd_candidates(user_email, course_code)
+    if not candidates:
+        # ponytail: no prereq graph — fall back to lowest-mastery unmastered topics
+        not_mastered = sorted(
+            (t for t in topic_list if t["status"] != "mastered"),
+            key=lambda t: t["mastery_score"],
+        )
+        candidates = [{"topic_id": t["topic_name"], "priority": 1.0} for t in not_mastered[:5]]
+
+    return {
+        "course_code": course_code,
+        "overall_mastery": await get_course_mastery(user_email, course_code),
+        "topics": topic_list,
+        "next": candidates,
+    }
 
 
 async def log_query(

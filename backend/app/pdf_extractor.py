@@ -12,8 +12,8 @@ Images are embedded natively using Nemotron VL — no captioning needed.
 """
 
 import asyncio
-import io
 import base64
+import io
 import logging
 from dataclasses import dataclass
 
@@ -103,6 +103,7 @@ def _sync_extract_all_pages(source: str | bytes) -> list[PageContent]:
 
     for i, page in enumerate(reader.pages, 1):
         text = page.extract_text() or ""
+        text = f"[Page {i}]\n" + text
         images = _extract_page_images(page)
         pages.append(PageContent(page_num=i, text=text, images=images))
 
@@ -175,8 +176,8 @@ def detect_sections(pages: list[PageContent]) -> list[Section]:
 def _ocr_fallback(pdf_path: str) -> list[PageContent]:
     """Fallback OCR for scanned/image PDFs. Uses pdf2image + pytesseract."""
     try:
-        from pdf2image import convert_from_path
         import pytesseract
+        from pdf2image import convert_from_path
     except ImportError:
         logger.warning("OCR dependencies not installed — add pytesseract and pdf2image to requirements.txt")
         return []
@@ -191,10 +192,10 @@ def _ocr_fallback(pdf_path: str) -> list[PageContent]:
     for i, img in enumerate(images, 1):
         try:
             text = pytesseract.image_to_string(img)
-            pages.append(PageContent(page_num=i, text=text, images=[]))
         except Exception as e:
             logger.warning("OCR failed on page %d: %s", i, e)
-            pages.append(PageContent(page_num=i, text="", images=[]))
+            text = ""
+        pages.append(PageContent(page_num=i, text=f"[Page {i}]\n{text}", images=[]))
 
     return pages
 

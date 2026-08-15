@@ -17,8 +17,8 @@ os.environ["SURREAL_NS"] = "test_ns"
 os.environ["SURREAL_DB"] = "test_db"
 
 import pytest_asyncio
-from app.db import SurrealDBManager
 
+from app.db import SurrealDBManager
 
 _CLEANUP_TABLES = ("course", "text_chunk", "image_chunk", "chat_message", "flashcard_set",
                    "quiz", "query_log", "knowledge_state", "topic_prerequisite",
@@ -43,3 +43,4 @@ async def surreal_db():
     await dbm._init_schema(db)
     yield db
     await db.close()
+    SurrealDBManager._instance = None

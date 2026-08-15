@@ -1,17 +1,19 @@
-import { Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from './providers';
 
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "./fonts/inter-var-latin.woff2",
+  weight: "400 700",
   variable: "--font-inter",
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrainsmono-400-latin.woff2",
+  weight: "400",
   variable: "--font-jetbrains",
-  weight: ["400"],
+  display: "swap",
 });
 
 export const metadata = {

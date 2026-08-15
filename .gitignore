@@ -91,3 +91,7 @@ new_frontend/test-results/
 
 # RAG documentation
 docs/RAG_FIX_PLAN.md
+
+# Generated artifacts
+graphify-out/
+new_frontend/src/app/fonts/

@@ -284,8 +284,8 @@ async def classify_sections_llm(sections: list, course_code: str) -> list[dict] 
 
 async def classify_sections_embedding(sections: list, course_code: str) -> list[dict] | None:
     """Fallback: assign topics via cosine similarity to cached topic embeddings."""
-    from app.provider_router import router
     from app.db import get_db
+    from app.provider_router import router
 
     db = await get_db()
     topics = await db.query(
@@ -398,3 +398,103 @@ async def get_topic_coverage(course_code: str) -> dict[str, Any]:
         "missing": sum(1 for r in result if r["status"] == "missing"),
         "topics": result,
     }
+
+
+async def classify_sections_fallback(sections: list, course_code: str) -> list[dict]:
+    """Fallback classification when no curriculum topics exist.
+    Uses simple keyword matching on section headings to assign generic topics."""
+    topic_keywords = {
+        "introduction": "Introduction",
+        "overview": "Overview",
+        "summary": "Summary",
+        "conclusion": "Conclusion",
+        "basics": "Basics",
+        "fundamentals": "Fundamentals",
+        "advanced": "Advanced",
+        "definition": "Definitions",
+        "example": "Examples",
+        "exercise": "Exercises",
+        "problem": "Problems",
+        "solution": "Solutions",
+        "theory": "Theory",
+        "practice": "Practice",
+        "lab": "Lab Work",
+        "assignment": "Assignments",
+        "quiz": "Quiz",
+        "test": "Test",
+        "exam": "Exam",
+        "homework": "Homework",
+        "reference": "References",
+        "appendix": "Appendix",
+        "chapter": "Chapter",
+        "lesson": "Lesson",
+        "unit": "Unit",
+        "part": "Part",
+        "section": "Section",
+        "topic": "Topic",
+        "content": "Content",
+        "material": "Material",
+        "notes": "Notes",
+        "lecture": "Lecture",
+        "discussion": "Discussion",
+        "question": "Questions",
+        "answer": "Answers",
+        "review": "Review",
+        "feedback": "Feedback",
+        "project": "Project",
+        "research": "Research",
+        "case study": "Case Study",
+        "methodology": "Methodology",
+        "results": "Results",
+        "analysis": "Analysis",
+        "background": "Background",
+        "motivation": "Motivation",
+        "objectives": "Objectives",
+        "goals": "Goals",
+        "outline": "Outline",
+        "agenda": "Agenda",
+        "schedule": "Schedule",
+        "timeline": "Timeline",
+        "bibliography": "Bibliography",
+        "glossary": "Glossary",
+        "index": "Index",
+        "preface": "Preface",
+        "foreword": "Foreword",
+        "acknowledgments": "Acknowledgments",
+        "epilogue": "Epilogue",
+        "prologue": "Prologue",
+    }
+
+    results = []
+    for i, sec in enumerate(sections):
+        heading_lower = sec.heading.lower()
+        text_lower = sec.text.lower()[:500]
+
+        topic_found = None
+        for keyword, topic_name in topic_keywords.items():
+            if keyword in heading_lower:
+                topic_found = topic_name
+                break
+
+        if not topic_found:
+            for keyword, topic_name in topic_keywords.items():
+                if keyword in text_lower:
+                    topic_found = topic_name
+                    break
+
+        if not topic_found:
+            if i == 0:
+                topic_found = "Introduction"
+            elif i == len(sections) - 1:
+                topic_found = "Conclusion"
+            else:
+                topic_found = f"Section {i+1}"
+
+        results.append({
+            "idx": i,
+            "topic": topic_found,
+            "confidence": "low",
+            "split_at_paragraph": None,
+        })
+
+    return results

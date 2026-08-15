@@ -1,5 +1,4 @@
 """Tests for scheduler module — pure functions for spaced repetition."""
-import pytest
 from app.scheduler import _mastery_to_rating, _schedule_simple
 
 

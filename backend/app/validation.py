@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 # --- Constants & Limits ---
 MAX_COURSE_CODE_LENGTH = 20

@@ -1,6 +1,8 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, patch
+
 from app.curriculum import CurriculumManager
 
 
@@ -151,7 +153,7 @@ async def test_curriculum_missing_field_auto_fix(surreal_db, mock_client, mock_f
 @pytest.mark.asyncio
 async def test_chat_history_manager(surreal_db):
     """Test chat history operations via the DB."""
-    from app.chat_history import add_message, get_course_history, clear_course_history
+    from app.chat_history import add_message, clear_course_history, get_course_history
 
     course_code = "CS101"
     session_id = "user_123"
@@ -269,8 +271,8 @@ async def test_gap_detection_no_data(surreal_db):
 
 @pytest.mark.asyncio
 async def test_gap_detection_identifies_drop(surreal_db):
-    from app.knowledge_state import KnowledgeStateManager
     from app.gap_detection import detect_gaps
+    from app.knowledge_state import KnowledgeStateManager
     ksm = KnowledgeStateManager()
     sid, cc, tid = "student6", "CS101", "LogicGates"
 
@@ -301,8 +303,8 @@ async def test_build_diagnostic_preamble():
 
 @pytest.mark.asyncio
 async def test_topic_coverage_covered_and_missing(surreal_db):
-    from app.topics import get_topic_coverage
     from app.db import get_db
+    from app.topics import get_topic_coverage
     db = await get_db()
 
     await db.query(
@@ -336,3 +338,42 @@ async def test_get_course_topics_order(surreal_db):
     stored = await get_course_topics("ORD101")
     assert stored[0]["topic_name"] == "B_topic"
     assert stored[1]["topic_name"] == "A_topic"
+
+
+@pytest.mark.asyncio
+async def test_quiz_save_multiple_same_bloom_no_race(surreal_db):
+    import httpx
+
+    from app.auth import create_access_token
+    from app.db import get_db
+    from app.deps import get_knowledge_state
+    from app.knowledge_state import KnowledgeStateManager
+    from server import app
+
+    app.dependency_overrides[get_knowledge_state] = lambda: KnowledgeStateManager()
+
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'test@test.com', 'role': 'student'})}"}
+    payload = {
+        "course_code": "RACE101",
+        "topic": "Race Topic",
+        "score": 2,
+        "total": 3,
+        "bloom_levels": [3],
+        "questions": [
+            {"question": f"q{i}", "correct_index": 0, "options": ["a", "b"], "user_answer_index": i % 2, "is_correct": i % 2 == 0, "bloom_level": 3}
+            for i in range(3)
+        ],
+    }
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/quiz/save", json=payload, headers=headers)
+        assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text}"
+
+    db = await get_db()
+    states = await db.query(
+        "SELECT * FROM knowledge_state WHERE student_id = $sid AND course_code = $cc AND topic_id = $tid AND bloom_level = 3",
+        {"sid": "test@test.com", "cc": "RACE101", "tid": "Race Topic"},
+    )
+    assert states, "expected at least one knowledge_state row"
+    assert states[0]["total_attempts"] == 3, f"expected total_attempts == 3, got {states[0]['total_attempts']}"

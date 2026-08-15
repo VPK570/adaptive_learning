@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from app.auth import get_current_user_from_request
-from app.validation import validate_course_code, sanitize_id, sanitize_text, MAX_QUESTION_LENGTH
-from app.chat_history import get_course_history, add_message, clear_course_history
+from app.chat_history import add_message, clear_course_history, get_course_history
+from app.validation import MAX_QUESTION_LENGTH, sanitize_id, sanitize_text, validate_course_code
 
 router = APIRouter()
 

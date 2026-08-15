@@ -2,6 +2,7 @@
 
 import logging
 import re
+
 import nltk
 from nltk.tokenize import sent_tokenize
 
@@ -23,12 +24,12 @@ def parse_citation(citation_text: str) -> tuple[str, str] | tuple[None, None]:
     match = re.search(r"\[Source:\s*(.*?),\s*(?:Slide|Page|Unit)?\s*(\d+)\]", citation_text, re.IGNORECASE)
     if match:
         return match.group(1).strip().lower(), match.group(2).strip()
-    
+
     # Fallback: [Source: Title, 5]
     match = re.search(r"\[Source:\s*(.*?),\s*(\d+)\]", citation_text, re.IGNORECASE)
     if match:
         return match.group(1).strip().lower(), match.group(2).strip()
-        
+
     return None, None
 
 
@@ -66,7 +67,7 @@ def extract_all_citations(text: str) -> list[str]:
 
 def remove_uncited_claims(text: str) -> str:
     """Remove or flag claims that lack a citation."""
-   
+
     _ensure_nltk_data()
     sentences = sent_tokenize(text)
     kept = []
@@ -116,10 +117,10 @@ def validate_citations(response: str, chunks: list[dict]) -> dict:
                     if (v_title in title or title in v_title) and v_page == page:
                         is_valid = True
                         break
-        
+
         if is_valid:
             valid += 1
-        
+
         detailed_results.append({"citation": cit, "parsed": (title, page), "valid": is_valid})
 
     return {

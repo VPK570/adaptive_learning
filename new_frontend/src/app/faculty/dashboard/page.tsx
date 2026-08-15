@@ -32,9 +32,13 @@ export default function FacultyDashboard() {
     code: c.course_code,
     title: c.course_name,
     term: '—',
-    students: '—',
+    students: String(c.student_count ?? 0),
     status: 'Active',
   }));
+
+  const totalStudents = courses.reduce((s, c) => s + (c.student_count || 0), 0);
+  const totalQueries = courses.reduce((s, c) => s + (c.total_queries || 0), 0);
+  const avgEngagement = courses.length ? Math.round(totalQueries / courses.length) : 0;
 
   return (
     <AppShell
@@ -60,9 +64,9 @@ export default function FacultyDashboard() {
         </header>
 
         <section className={styles.statsRow}>
-          <StatTile iconName="Users" value="—" label="Total Students" accent="primary" />
+          <StatTile iconName="Users" value={String(totalStudents)} label="Total Students" accent="primary" />
           <StatTile iconName="BookOpen" value={String(courses.length || '—')} label="Active Courses" accent="secondary" />
-          <StatTile iconName="Activity" value="—" label="Avg Engagement" accent="tertiary" />
+          <StatTile iconName="Activity" value={String(avgEngagement)} label="Avg Engagement" accent="tertiary" />
         </section>
 
         <section className={styles.coursesSection}>

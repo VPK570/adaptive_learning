@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
-from app.tasks import celery_app
 from app.scheduler import run_nightly_scheduler
+from app.tasks import celery_app
 
 router = APIRouter()
 

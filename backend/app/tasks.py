@@ -40,7 +40,7 @@ def restore_request_id(task, **kwargs):
         request_id_var.set(rid)
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=5, autoretry_for=(ValueError,))
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=5)
 def ingest_pdf_task(self, course_code: str, document_title: str, filepath: str, topic: str = "", metadata: dict | None = None) -> dict:
     import shutil
     from pathlib import Path
@@ -84,7 +84,7 @@ def ingest_pdf_task(self, course_code: str, document_title: str, filepath: str, 
             os.remove(str(permanent_path))
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=5, autoretry_for=(ValueError,))
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=5)
 def ingest_curriculum_task(self, course_code: str, document_title: str, filepath: str, topic: str = "") -> dict:
     from app.curriculum import CurriculumManager
     cm = CurriculumManager()

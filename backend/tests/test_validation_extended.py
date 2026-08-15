@@ -1,8 +1,13 @@
 """Tests for validation module — sanitization, injection protection, file validation."""
 import pytest
+
 from app.validation import (
-    sanitize_student_query, validate_course_code, sanitize_text,
-    validate_filename, MAX_QUESTION_LENGTH, MAX_COURSE_CODE_LENGTH,
+    MAX_COURSE_CODE_LENGTH,
+    MAX_QUESTION_LENGTH,
+    sanitize_student_query,
+    sanitize_text,
+    validate_course_code,
+    validate_filename,
 )
 
 

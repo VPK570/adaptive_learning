@@ -1,6 +1,8 @@
-from typing import Tuple
-from app.provider_router import router as client
 import logging
+from typing import Tuple
+
+from app.provider_router import router as client
+
 logger = logging.getLogger(__name__)
 class Verifier:
     def __init__(self, model: str | None = None):
@@ -57,7 +59,7 @@ COURSE MATERIALS:
                     "required": ["valid", "reason"]
                 }
             )
-            
+
             return response.get("valid", True), response.get("reason")
         except Exception as e:
             logger.error(f"[Verifier] Error: {e}")

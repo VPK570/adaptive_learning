@@ -100,14 +100,28 @@ async def delete_material(
     filename: str = Query(...),
     _=Depends(require_role("faculty", "admin")),
 ):
-    course_code = validate_course_code(course_code)
+    import os
+    # Get file_path from document record for physical file cleanup
     db = await get_db()
+    doc = await db.query(
+        "SELECT file_path FROM document WHERE course_code = $code AND filename = $title",
+        {"code": course_code, "title": filename},
+    )
+    file_path = doc[0].get("file_path") if doc else None
+
     await db.query("DELETE text_chunk WHERE course_code = $code AND source_title = $title",
                    {"code": course_code, "title": filename})
     await db.query("DELETE image_chunk WHERE course_code = $code AND source_title = $title",
                    {"code": course_code, "title": filename})
     await db.query("DELETE document WHERE course_code = $code AND filename = $title",
                    {"code": course_code, "title": filename})
+
+    # Delete physical file if exists
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass  # Log or ignore file deletion errors
     return {"status": "success"}
 
 
@@ -117,8 +131,17 @@ async def delete_curriculum(
     filename: str = Query(...),
     _=Depends(require_role("faculty", "admin")),
 ):
+    import os
     course_code = validate_course_code(course_code)
     db = await get_db()
+
+    # Get file_path from document record for physical file cleanup
+    doc = await db.query(
+        "SELECT file_path FROM document WHERE course_code = $code AND filename = $title",
+        {"code": course_code, "title": filename},
+    )
+    file_path = doc[0].get("file_path") if doc else None
+
     await db.query("DELETE curriculum_chunk WHERE course_code = $code AND source_title = $title",
                    {"code": course_code, "title": filename})
     await db.query("DELETE document WHERE course_code = $code AND filename = $title",
@@ -126,4 +149,11 @@ async def delete_curriculum(
     # ponytail: clear topics instead of re-extracting
     await db.query("DELETE course_topic WHERE course_code = $code", {"code": course_code})
     await db.query("DELETE topic_prerequisite WHERE course_code = $code", {"code": course_code})
+
+    # Delete physical file if exists
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass  # Log or ignore file deletion errors
     return {"status": "success"}

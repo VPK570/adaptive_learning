@@ -7,6 +7,7 @@ import StatTile from '@/app/components/StatTile';
 import CourseCard from '@/app/components/CourseCard';
 import { useQuery } from '@tanstack/react-query';
 import { coursesApi } from '@/lib/api/courses';
+import { analyticsApi } from '@/lib/api/analytics';
 import { useAuthStore } from '@/lib/store/authStore';
 import type { Course } from '@/lib/api/types';
 import styles from './Dashboard.module.css';
@@ -19,7 +20,16 @@ export default function StudentDashboard() {
     staleTime: 30_000,
   });
 
+  const { data: stats } = useQuery({
+    queryKey: ['my-stats'],
+    queryFn: ({ signal }) => analyticsApi.getMyStats(signal),
+    staleTime: 30_000,
+  });
+
   const userName = user?.name?.split(' ')[0] || 'Student';
+  const overall = stats?.courses.length
+    ? Math.round(stats.courses.reduce((s, c) => s + c.overall_mastery, 0) / stats.courses.length * 100)
+    : 0;
   const courseCards = courses.map(c => ({
     id: c.course_code,
     title: c.course_name,
@@ -34,19 +44,19 @@ export default function StudentDashboard() {
         <header className={styles.header}>
           <div className={styles.welcomeBlock}>
             <h1 className={styles.greeting}>Welcome back, {userName}</h1>
-            <p className={styles.subtitle}>Here's where you left off. Keep up the momentum.</p>
+            <p className={styles.subtitle}>Here&apos;s where you left off. Keep up the momentum.</p>
           </div>
         </header>
 
         <section className={styles.statsSection}>
           <div className={styles.radialWrapper}>
-            <RadialProgress percent={0} label="OVERALL" />
+            <RadialProgress percent={overall} label="OVERALL" />
           </div>
 
           <div className={styles.statGrid}>
-            <StatTile iconName="Flame" value="—" label="Current Streak" accent="tertiary" />
-            <StatTile iconName="CheckCircle" value="—" label="Topics Completed" accent="primary" />
-            <StatTile iconName="Award" value="—" label="Quizzes Taken" accent="secondary" />
+            <StatTile iconName="Flame" value={String(stats?.current_streak ?? 0)} label="Current Streak" accent="tertiary" />
+            <StatTile iconName="CheckCircle" value={String(stats?.active_days ?? 0)} label="Active Days" accent="primary" />
+            <StatTile iconName="Award" value={String(stats?.total_quizzes ?? 0)} label="Quizzes Taken" accent="secondary" />
           </div>
         </section>
 

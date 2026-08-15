@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api/auth';
 
@@ -106,7 +107,7 @@ export default function RegisterPage() {
 
         <footer className="auth-footer">
           <p className="auth-footer-text">
-            Already have an account? <a href="/" className="auth-link">Sign in</a>
+            Already have an account? <Link href="/" className="auth-link">Sign in</Link>
           </p>
         </footer>
       </main>

@@ -1,7 +1,7 @@
-from typing import Optional, Tuple, Any
+import logging
+from typing import Any, Optional, Tuple
 
 from app.provider_router import router as client
-import logging
 
 logger = logging.getLogger(__name__)
 

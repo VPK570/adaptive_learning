@@ -258,6 +258,8 @@ class QueryEngine:
         top_k: int = 5,
         bloom_level: int | None = None,
         images: list[dict] | None = None,
+        source_titles: list[str] | None = None,
+        topics: list[str] | None = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         course_ctx = await self._get_course_context(course_code)
         logger.info("QUERY_STREAM: course=%s query=%s", course_code, query[:100])
@@ -284,6 +286,8 @@ class QueryEngine:
                 query=sq,
                 course_code=course_code,
                 top_k=top_k,
+                source_titles=source_titles,
+                topics=topics,
             )
             logger.info("RETRIEVE: query=%s got %d chunks", sq, len(sq_chunks))
             for c in sq_chunks:
@@ -371,6 +375,8 @@ class QueryEngine:
         top_k: int = 5,
         bloom_level: int | None = None,
         images: list[dict] | None = None,
+        source_titles: list[str] | None = None,
+        topics: list[str] | None = None,
     ) -> dict:
         course_ctx = await self._get_course_context(course_code)
         is_relevant, _, refusal = await gatekeeper.check_and_enrich(
@@ -404,6 +410,8 @@ class QueryEngine:
                 query=sq,
                 course_code=course_code,
                 top_k=top_k,
+                source_titles=source_titles,
+                topics=topics,
             )
             for c in sq_chunks:
                 cid = c.get("chunk_id") or str(c.get("id", ""))

@@ -34,6 +34,9 @@ export interface Course {
   doc_count?: number;
   chunk_count?: number;
   created_at?: string;
+  documents?: { name: string; file_url?: string; file_size?: number; doc_type?: string }[];
+  student_count?: number;
+  total_queries?: number;
 }
 
 export interface CourseCreate {
@@ -67,6 +70,7 @@ export interface QuizQuestion {
   explanation: string;
   user_answer_index?: number;
   is_correct?: boolean;
+  bloom_level?: number;
 }
 
 export interface QuizRequest {
@@ -90,6 +94,9 @@ export interface SavedQuiz {
   course_code: string;
   topic: string;
   score: number;
+  total: number;
+  questions?: QuizQuestion[];
+  bloom_levels?: number[];
   created_at: string;
 }
 
@@ -117,7 +124,24 @@ export interface SavedFlashcardSet {
   id: string;
   course_code: string;
   topic: string;
+  cards?: Flashcard[];
+  times_studied?: number;
+  best_recall?: number | null;
+  last_recall?: number | null;
   created_at: string;
+}
+
+export interface RecordFlashcardRequest {
+  known_count: number;
+  total: number;
+}
+
+export interface RecordFlashcardResponse {
+  id: string;
+  times_studied: number;
+  best_recall: number;
+  last_recall: number;
+  status: string;
 }
 
 export interface ChatFeedbackRequest {
@@ -136,6 +160,8 @@ export interface QueryRequest {
   mastery?: number | null;
   bloom_level?: number | null;
   image_ids?: string[];
+  source_titles?: string[];
+  topics?: string[];
 }
 
 export interface ChatMessage {
@@ -167,6 +193,35 @@ export interface TopicCoverageItem {
   chunk_count: number;
   subtopics: string[];
   bloom_level: string;
+}
+
+// Student stats (WS1)
+export interface StudentCourseStat {
+  course_code: string;
+  overall_mastery: number;
+  quizzes_taken: number;
+}
+
+export interface StudentStats {
+  courses: StudentCourseStat[];
+  total_quizzes: number;
+  current_streak: number;
+  active_days: number;
+}
+
+export interface StudentCourseMap {
+  course_code: string;
+  overall_mastery: number;
+  next: { topic_id: string; priority: number }[];
+  topics: {
+    topic_id: string;
+    topic_name: string;
+    mastery_score: number;
+    bloom_level: string;
+    prerequisites: string[];
+    status: 'mastered' | 'in_progress' | 'not_started';
+    attempts: number;
+  }[];
 }
 
 // Analytics

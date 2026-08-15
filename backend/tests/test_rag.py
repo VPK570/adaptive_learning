@@ -5,12 +5,15 @@ import pytest_asyncio
 
 from app.chunker import chunk_text, clean_text
 from app.citation import (
-    has_citation, extract_all_citations, format_citation, validate_citations,
+    extract_all_citations,
+    format_citation,
+    has_citation,
+    validate_citations,
 )
 from app.query_engine import (
-    build_tutor_system_prompt,
     build_context_window,
     build_tutor_prompt,
+    build_tutor_system_prompt,
 )
 
 
@@ -19,7 +22,7 @@ async def reset_surreal_singleton():
     from app.db import SurrealDBManager
     SurrealDBManager._instance = None
     yield
-    SurrealDBManager._instance = None
+    await SurrealDBManager.reset()
 
 
 class TestChunking:
@@ -46,6 +49,19 @@ class TestChunking:
         chunks = chunk_text(text, chunk_size=50, overlap_tokens=10)
         assert len(chunks) >= 2
         assert all(isinstance(c, tuple) and len(c) == 3 for c in chunks)
+
+    def test_ocr_fallback_adds_page_markers(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from app import pdf_extractor as pe
+
+        fake_convert = SimpleNamespace(convert_from_path=lambda path, dpi=300: [object()])
+        fake_tess = SimpleNamespace(image_to_string=lambda img: "OCR line one\nOCR line two")
+        with patch.dict(sys.modules, {"pdf2image": fake_convert, "pytesseract": fake_tess}):
+            pages = pe._ocr_fallback("dummy.pdf")
+        assert pages[0].text.startswith("[Page 1]")
 
 
 class TestCitation:
@@ -273,7 +289,8 @@ class TestChunkerEdgeCases:
         assert chunk_text("   ", 50, 10) == []
 
 
-from app.citation import parse_citation, format_citation, remove_uncited_claims as _remove_uncited_claims
+from app.citation import parse_citation
+from app.citation import remove_uncited_claims as _remove_uncited_claims
 
 
 class TestCitationEdgeCases:
@@ -372,12 +389,17 @@ TEST_PDF_TEXT = (
 async def test_topic_analysis_stored_on_ingest_pdf():
     import os
     import tempfile
+
     from app.db import get_db
     from app.rag import RAGPipeline
 
     rag = RAGPipeline()
     db = await get_db()
     course = "TEST_TA"
+
+    # idempotent: clear leftovers from a prior interrupted run
+    await db.query("DELETE course_topic WHERE course_code = $code", {"code": course})
+    await db.query("DELETE document WHERE course_code = $code", {"code": course})
 
     # seed a course topic so coverage computation has data
     await db.query(

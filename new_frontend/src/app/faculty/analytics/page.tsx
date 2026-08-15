@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import AppShell from '@/app/components/AppShell';
 import { api } from '@/lib/api/client';
@@ -28,7 +28,7 @@ function getDayLabel(dateStr: string): string {
 }
 
 export default function FacultyAnalyticsPage() {
-  const [courseCode, setCourseCode] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('');
   const [period, setPeriod] = useState<'7D' | '30D'>('7D');
 
   const { data: courses = [] } = useQuery({
@@ -37,9 +37,7 @@ export default function FacultyAnalyticsPage() {
     staleTime: 30_000,
   });
 
-  useEffect(() => {
-    if (courses.length > 0 && !courseCode) setCourseCode(courses[0].course_code);
-  }, [courses]);
+  const courseCode = selectedCourse || courses[0]?.course_code || '';
 
   const { data: analytics, isLoading: analyticsLoading, isError: analyticsError } = useQuery({
     queryKey: ['analytics', courseCode],
@@ -119,8 +117,8 @@ export default function FacultyAnalyticsPage() {
           </div>
           <div className={styles.courseSelect}>
             <select
-              value={courseCode}
-              onChange={(e) => setCourseCode(e.target.value)}
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
             >
               {courses.map((c) => (
                 <option key={c.course_code} value={c.course_code}>

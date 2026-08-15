@@ -6,6 +6,7 @@ from app.analytics import (
     get_analytics,
     get_coverage,
     get_my_analytics,
+    get_student_stats,
     get_unanswered_questions,
 )
 from app.auth import get_current_user_from_request, require_role
@@ -14,6 +15,11 @@ from app.topics import get_topic_coverage
 from app.validation import validate_course_code
 
 router = APIRouter()
+
+
+@router.get("/students/me/stats")
+async def my_stats(current_user: dict = Depends(get_current_user_from_request)):
+    return await get_student_stats(current_user["email"])
 
 
 @router.get("/analytics/me")

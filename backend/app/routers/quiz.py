@@ -1,5 +1,3 @@
-import asyncio
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user_from_request
@@ -136,7 +134,11 @@ async def save_quiz(
         if bloom_level and 1 <= bloom_level <= 6:
             updates.append(ks.update_state(student_id, course_code, topic, bloom_level, is_correct))
     if updates:
-        await asyncio.gather(*updates)
+        # ponytail: update_state is check-then-act (SELECT->UPDATE->CREATE); concurrent
+        # same-key calls collide on the ks_student_course unique index. Serialize here —
+        # only sequential callers exist today. Per-key lock if concurrent callers appear.
+        for update in updates:
+            await update
 
     from app.db import get_db
     db = await get_db()
@@ -148,12 +150,12 @@ async def save_quiz(
 
 
 @router.get("/quiz/saved")
-async def list_saved_quizzes(course: str = Query(...), _=Depends(get_current_user_from_request)):
+async def list_saved_quizzes(course: str = Query(...), user: dict = Depends(get_current_user_from_request)):
     course_code = validate_course_code(course)
     db = await get_db()
     rows = await db.query(
-        "SELECT * FROM quiz WHERE course_code = $cc ORDER BY created_at DESC",
-        {"cc": course_code},
+        "SELECT * FROM quiz WHERE course_code = $cc AND user_id = $uid ORDER BY created_at DESC",
+        {"cc": course_code, "uid": user["email"]},
     )
     return [
         {
@@ -162,6 +164,8 @@ async def list_saved_quizzes(course: str = Query(...), _=Depends(get_current_use
             "topic": r.get("topic"),
             "score": r.get("score"),
             "total": r.get("total"),
+            "questions": r.get("questions"),
+            "bloom_levels": r.get("bloom_levels"),
             "created_at": str(r.get("created_at")) if r.get("created_at") else None,
         }
         for r in (rows or [])
@@ -172,7 +176,7 @@ async def list_saved_quizzes(course: str = Query(...), _=Depends(get_current_use
 async def delete_saved_quiz(quiz_id: str, user: dict = Depends(get_current_user_from_request)):
     db = await get_db()
     result = await db.query(
-        "DELETE quiz WHERE id = $id AND user_id = $uid RETURN BEFORE",
+        "DELETE quiz WHERE id = type::record($id) AND user_id = $uid RETURN BEFORE",
         {"id": quiz_id, "uid": user["email"]},
     )
     if not result:

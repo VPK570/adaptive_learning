@@ -12,7 +12,7 @@ from app.knowledge_state import BLOOM_LABELS
 from app.provider_router import router as client
 from app.query_enhancer import generate_search_queries
 from app.rag import RAGPipeline
-from app.schemas import FlashcardRequest, SaveFlashcardRequest
+from app.schemas import FlashcardRequest, RecordFlashcardRequest, SaveFlashcardRequest
 from app.topics import get_course_topics
 from app.validation import MAX_TOPIC_LENGTH, sanitize_text, validate_course_code
 
@@ -133,29 +133,57 @@ async def save_flashcards(
 
 
 @router.get("/flashcards/saved")
-async def list_saved_flashcards(course: str = Query(...), _=Depends(get_current_user_from_request)):
+async def list_saved_flashcards(course: str = Query(...), user: dict = Depends(get_current_user_from_request)):
     course_code = validate_course_code(course)
     db = await get_db()
     rows = await db.query(
-        "SELECT * FROM flashcard_set WHERE course_code = $cc ORDER BY created_at DESC",
-        {"cc": course_code},
+        "SELECT * FROM flashcard_set WHERE course_code = $cc AND user_id = $uid ORDER BY created_at DESC",
+        {"cc": course_code, "uid": user["email"]},
     )
     return [
         {
             "id": str(r["id"]),
             "course_code": r.get("course_code"),
             "topic": r.get("topic"),
+            "cards": r.get("cards"),
+            "times_studied": r.get("times_studied") or 0,
+            "best_recall": r.get("best_recall"),
+            "last_recall": r.get("last_recall"),
             "created_at": str(r.get("created_at")) if r.get("created_at") else None,
         }
         for r in (rows or [])
     ]
 
 
+@router.post("/flashcards/saved/{set_id}/record")
+async def record_flashcard_study(
+    set_id: str,
+    body: RecordFlashcardRequest,
+    user: dict = Depends(get_current_user_from_request),
+):
+    db = await get_db()
+    rows = await db.query(
+        "SELECT * FROM flashcard_set WHERE id = type::record($id) AND user_id = $uid",
+        {"id": set_id, "uid": user["email"]},
+    ) or []
+    if not rows:
+        raise HTTPException(404, "Flashcard set not found or not owned by you")
+    recall = round(body.known_count / body.total * 100)
+    current = rows[0]
+    times = (current.get("times_studied") or 0) + 1
+    best = max(current.get("best_recall") or 0, recall)
+    await db.query(
+        "UPDATE flashcard_set SET times_studied = $ts, best_recall = $br, last_recall = $lr WHERE id = type::record($id) AND user_id = $uid",
+        {"id": set_id, "uid": user["email"], "ts": times, "br": best, "lr": recall},
+    )
+    return {"id": set_id, "times_studied": times, "best_recall": best, "last_recall": recall, "status": "recorded"}
+
+
 @router.delete("/flashcards/saved/{set_id}")
 async def delete_saved_flashcards(set_id: str, user: dict = Depends(get_current_user_from_request)):
     db = await get_db()
     result = await db.query(
-        "DELETE flashcard_set WHERE id = $id AND user_id = $uid RETURN BEFORE",
+        "DELETE flashcard_set WHERE id = type::record($id) AND user_id = $uid RETURN BEFORE",
         {"id": set_id, "uid": user["email"]},
     )
     if not result:

@@ -195,11 +195,11 @@ export default function Home() {
 
         <footer className="auth-footer">
           <p className="auth-footer-text">
-            Don't have an account? <a href="/register" className="auth-link">Create an account</a>
+            Don&apos;t have an account? <a href="/register" className="auth-link">Create an account</a>
           </p>
           <div className="trust-badge">
             <Shield size={12} />
-            <span>Your data stays within your institution's infrastructure</span>
+            <span>Your data stays within your institution&apos;s infrastructure</span>
           </div>
         </footer>
       </main>

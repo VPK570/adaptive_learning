@@ -18,15 +18,17 @@ export default function FlashcardsPage() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<'config' | 'studying' | 'results'>('config');
-  const [courseCode, setCourseCode] = useState('');
-  const [topic, setTopic] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState('');
   const [count, setCount] = useState(15);
-  const [bloomLevel, setBloomLevel] = useState('1');
+  const [selectedBloomLevel, setSelectedBloomLevel] = useState('');
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [knownCount, setKnownCount] = useState(0);
+  const [activeSetId, setActiveSetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const startTime = useRef(0);
@@ -35,8 +37,13 @@ export default function FlashcardsPage() {
   const isFlippedRef = useRef(isFlipped);
   const handleKnownRef = useRef<(known: boolean) => void>(() => {});
 
-  phaseRef.current = phase;
-  isFlippedRef.current = isFlipped;
+  const { data: courses = [] } = useQuery({
+    queryKey: ['courses'],
+    queryFn: ({ signal }) => coursesApi.list(signal),
+    staleTime: 30_000,
+  });
+
+  const courseCode = selectedCourse || courses[0]?.course_code || '';
 
   const { data: savedSets = [] } = useQuery({
     queryKey: ['flashcards-saved', courseCode],
@@ -45,16 +52,6 @@ export default function FlashcardsPage() {
     staleTime: 30_000,
   });
 
-  const { data: courses = [] } = useQuery({
-    queryKey: ['courses'],
-    queryFn: ({ signal }) => coursesApi.list(signal),
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    if (courses.length > 0 && !courseCode) setCourseCode(courses[0].course_code);
-  }, [courses]);
-
   const { data: topics = [] } = useQuery({
     queryKey: ['topics', courseCode],
     queryFn: () => coursesApi.getStructuredTopics(courseCode),
@@ -62,21 +59,15 @@ export default function FlashcardsPage() {
     staleTime: 30_000,
   });
 
-  useEffect(() => {
-    const list = Array.isArray(topics) ? topics : [];
-    if (list.length > 0) {
-      setTopic(list[0].topic_name);
-      const bl = BLOOM_MAP[list[0].bloom_level];
-      if (bl) setBloomLevel(bl);
-    }
-  }, [topics]);
+  const topic = selectedTopic || (Array.isArray(topics) && topics.length > 0 ? topics[0].topic_name : '');
+  const bloomLevel = selectedBloomLevel || (Array.isArray(topics) && topics.length > 0 ? BLOOM_MAP[topics[0].bloom_level] || '1' : '1');
 
   const handleTopicChange = (value: string) => {
-    setTopic(value);
+    setSelectedTopic(value);
     const match = topics.find(t => t.topic_name === value);
     if (match) {
       const bl = BLOOM_MAP[match.bloom_level];
-      if (bl) setBloomLevel(bl);
+      if (bl) setSelectedBloomLevel(bl);
     }
   };
 
@@ -102,7 +93,11 @@ export default function FlashcardsPage() {
     }
   };
 
-  handleKnownRef.current = handleKnown;
+  useEffect(() => {
+    phaseRef.current = phase;
+    isFlippedRef.current = isFlipped;
+    handleKnownRef.current = handleKnown;
+  });
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -140,6 +135,7 @@ export default function FlashcardsPage() {
       setIsFlipped(false);
       setKnownCount(0);
       setElapsed(0);
+      setActiveSetId(null);
       setPhase('studying');
     } catch {
       setError('Failed to generate cards. Please try again.');
@@ -169,6 +165,39 @@ export default function FlashcardsPage() {
     setIsFlipped(false);
     setKnownCount(0);
     setElapsed(0);
+    setActiveSetId(null);
+  };
+
+  const restart = () => {
+    setCurrentIdx(0);
+    setIsFlipped(false);
+    setKnownCount(0);
+    setElapsed(0);
+    setPhase('studying');
+  };
+
+  const handleStudySaved = (set: SavedFlashcardSet) => {
+    if (!set.cards?.length) return;
+    setCards(set.cards);
+    setCurrentIdx(0);
+    setIsFlipped(false);
+    setKnownCount(0);
+    setElapsed(0);
+    setActiveSetId(set.id);
+    setPhase('studying');
+  };
+
+  const handleRecordProgress = async () => {
+    if (!activeSetId || !cards.length) return;
+    setRecording(true);
+    try {
+      await flashcardsApi.record(activeSetId, { known_count: knownCount, total: cards.length });
+      queryClient.invalidateQueries({ queryKey: ['flashcards-saved'] });
+      showToast('Progress recorded!', 'success');
+    } catch {
+      showToast('Failed to record progress', 'error');
+    }
+    setRecording(false);
   };
 
   const formatTime = (s: number) => {
@@ -193,7 +222,7 @@ export default function FlashcardsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                   <div className={styles.formRow}>
                     <label>Select Course</label>
-                    <select className={styles.selectField} value={courseCode} onChange={e => setCourseCode(e.target.value)}>
+                    <select className={styles.selectField} value={selectedCourse} onChange={e => setSelectedCourse(e.target.value)}>
                       {courses.map(c => (
                         <option key={c.course_code} value={c.course_code}>{c.course_code}: {c.course_name}</option>
                       ))}
@@ -222,13 +251,13 @@ export default function FlashcardsPage() {
                   </div>
                   <div className={styles.formRow}>
                     <label>Cognitive Level</label>
-                    <select className={styles.selectField} value={bloomLevel} onChange={e => setBloomLevel(e.target.value)}>
-                      <option value="1">Bloom's: Remember</option>
-                      <option value="2">Bloom's: Understand</option>
-                      <option value="3">Bloom's: Apply</option>
-                      <option value="4">Bloom's: Analyze</option>
-                      <option value="5">Bloom's: Evaluate</option>
-                      <option value="6">Bloom's: Create</option>
+                    <select className={styles.selectField} value={selectedBloomLevel} onChange={e => setSelectedBloomLevel(e.target.value)}>
+                      <option value="1">Bloom&apos;s: Remember</option>
+                      <option value="2">Bloom&apos;s: Understand</option>
+                      <option value="3">Bloom&apos;s: Apply</option>
+                      <option value="4">Bloom&apos;s: Analyze</option>
+                      <option value="5">Bloom&apos;s: Evaluate</option>
+                      <option value="6">Bloom&apos;s: Create</option>
                     </select>
                   </div>
                 </div>
@@ -244,7 +273,16 @@ export default function FlashcardsPage() {
                     <div key={set.id} className={styles.historyCard}>
                       <span className={styles.historyCardCode}>{set.course_code}</span>
                       <p style={{ font: 'var(--text-headline-sm)', fontSize: 14, margin: '4px 0' }}>{set.topic}</p>
-                      <p style={{ fontSize: 12, color: 'var(--color-on-surface-variant)', margin: 0 }}>{new Date(set.created_at).toLocaleDateString()}</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--color-on-surface-variant)' }}>
+                          {set.times_studied ? `Studied ×${set.times_studied}` : 'Not studied yet'}
+                          {set.best_recall != null ? ` · Best ${set.best_recall}%` : ''}
+                        </span>
+                        <button className={styles.studyBtn} onClick={() => handleStudySaved(set)} disabled={!set.cards?.length}>
+                          Study
+                        </button>
+                      </div>
+                      <p style={{ fontSize: 12, color: 'var(--color-on-surface-variant)', margin: '8px 0 0' }}>{new Date(set.created_at).toLocaleDateString()}</p>
                     </div>
                   ))}
                   {!savedSets.length && <p style={{ fontSize: 13, color: 'var(--color-on-surface-variant)' }}>No saved sets yet.</p>}
@@ -312,8 +350,15 @@ export default function FlashcardsPage() {
                 <p className={styles.resultStatValue} style={{ color: 'var(--color-secondary)' }}>{knownCount} / {cards.length}</p>
               </div>
             </div>
-            <button className={styles.genBtn} onClick={handleSave}>Save to My Collections</button>
-            <button onClick={reset} style={{ width: '100%', padding: 'var(--space-4)', border: '1px solid var(--color-outline-variant)', borderRadius: 'var(--radius-DEFAULT)', color: 'var(--color-on-surface-variant)', fontWeight: 700, font: 'var(--text-body-md)', background: 'none', cursor: 'pointer' }}>Practice Again</button>
+            {activeSetId ? (
+              <button className={styles.genBtn} onClick={handleRecordProgress} disabled={recording}>
+                {recording ? 'Recording...' : 'Record Progress'}
+              </button>
+            ) : (
+              <button className={styles.genBtn} onClick={handleSave}>Save to My Collections</button>
+            )}
+            <button onClick={restart} style={{ width: '100%', padding: 'var(--space-4)', border: '1px solid var(--color-outline-variant)', borderRadius: 'var(--radius-DEFAULT)', color: 'var(--color-on-surface-variant)', fontWeight: 700, font: 'var(--text-body-md)', background: 'none', cursor: 'pointer' }}>Practice Again</button>
+            <button onClick={reset} style={{ background: 'none', border: 'none', color: 'var(--color-on-surface-variant)', font: 'var(--text-body-md)', cursor: 'pointer' }}>Exit to Study Sets</button>
           </div>
         )}
       </div>

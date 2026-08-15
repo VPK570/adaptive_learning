@@ -68,6 +68,9 @@ class Settings:
     QUERY_ENHANCER_ENABLED: bool = os.getenv("QUERY_ENHANCER_ENABLED", "true").lower() == "true"
     QUERY_ENHANCER_NUM_QUERIES: int = int(os.getenv("QUERY_ENHANCER_NUM_QUERIES", "3"))
 
+    INTEGRITY_MODE: str = os.getenv("INTEGRITY_MODE", "off").lower()
+    LEAKAGE_THRESHOLD: float = float(os.getenv("LEAKAGE_THRESHOLD", "0.7"))
+
     DKT_ACTIVE: bool = os.getenv("DKT_ACTIVE", "false").lower() == "true"
     MASTERY_THRESHOLD: float = float(os.getenv("MASTERY_THRESHOLD", "0.7"))
     BKT_LEARNING_RATE: float = float(os.getenv("BKT_LEARNING_RATE", "0.15"))

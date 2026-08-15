@@ -3,3 +3,20 @@ target-version = "py311"
 [lint]
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
+
+[lint.per-file-ignores]
+# E402: imports intentionally after logger/env-var setup (circular-import + env ordering)
+# N802: properties named after env vars (GEMINI_API_KEYS, OPENROUTER_API_KEYS)
+# W291/W293: trailing whitespace is INSIDE f-string SQL/prompt strings sent to
+# SurrealDB/LLM — removing it changes runtime payloads
+"app/config.py" = ["N802"]
+"app/query_engine.py" = ["E402"]
+"server.py" = ["E402"]
+"tests/conftest.py" = ["E402", "N813"]
+"tests/test_rag.py" = ["E402"]
+"app/pdf_extractor.py" = ["E402"]
+"app/curriculum.py" = ["W291"]
+"app/rag.py" = ["W291"]
+"app/paper_generator.py" = ["W293"]
+"app/chunker.py" = ["W291"]
+"app/validation.py" = ["W291", "W293"]

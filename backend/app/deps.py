@@ -1,8 +1,9 @@
 from fastapi import Request
-from app.rag import RAGPipeline
-from app.query_engine import QueryEngine
+
 from app.curriculum import CurriculumManager
 from app.knowledge_state import KnowledgeStateManager
+from app.query_engine import QueryEngine
+from app.rag import RAGPipeline
 
 
 def get_rag(request: Request) -> RAGPipeline:
