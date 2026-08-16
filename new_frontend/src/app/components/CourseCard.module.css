@@ -105,5 +105,5 @@
 
 .ghostBtn:hover {
   color: var(--color-primary-fixed);
-  background-color: rgba(192, 193, 255, 0.05);
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }

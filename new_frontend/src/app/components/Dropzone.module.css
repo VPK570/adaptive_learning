@@ -14,7 +14,7 @@
 
 .dropzone.dragOver {
   border-color: var(--color-primary);
-  background-color: rgba(192, 193, 255, 0.05);
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .iconCircle {
@@ -60,7 +60,7 @@
 }
 
 .browseBtn:hover {
-  background-color: rgba(192, 193, 255, 0.1);
+  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .hiddenInput {

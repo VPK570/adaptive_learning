@@ -102,6 +102,9 @@
   justify-content: center;
   margin-bottom: var(--space-4);
 }
+.statIconPrimary { background: color-mix(in srgb, var(--color-primary) 10%, transparent); color: var(--color-primary); }
+.statIconError { background: color-mix(in srgb, var(--color-error) 20%, transparent); color: var(--color-error); }
+.statIconSecondary { background: color-mix(in srgb, var(--color-secondary) 10%, transparent); color: var(--color-secondary); }
 
 .statValue {
   font: var(--text-headline-xl);
@@ -130,7 +133,7 @@
 
 .chartCard {
   background: var(--color-surface-container-low);
-  border: 1px solid rgba(70, 69, 84, 0.1);
+  border: 1px solid var(--color-outline-variant);
   padding: var(--space-8);
   border-radius: var(--radius-md);
 }
@@ -182,7 +185,7 @@
 
 .trendingCard {
   background: var(--color-surface-container-low);
-  border: 1px solid rgba(70, 69, 84, 0.1);
+  border: 1px solid var(--color-outline-variant);
   padding: var(--space-8);
   border-radius: var(--radius-md);
 }
@@ -195,7 +198,7 @@
 
 .trendingItem {
   padding: var(--space-4);
-  background: rgba(31, 31, 39, 0.5);
+  background: var(--color-surface-container);
   border-radius: var(--radius-md);
   border-left: 2px solid transparent;
   margin-bottom: var(--space-4);
@@ -216,6 +219,7 @@
   font: var(--text-label-md);
   letter-spacing: 0.01em;
 }
+.questionCountActive { color: color-mix(in srgb, var(--color-primary) 80%, transparent); }
 
 .doubleGrid {
   display: grid;
@@ -232,7 +236,7 @@
 
 .sectionCard {
   background: var(--color-surface-container-low);
-  border: 1px solid rgba(70, 69, 84, 0.1);
+  border: 1px solid var(--color-outline-variant);
   padding: var(--space-8);
   border-radius: var(--radius-md);
 }
@@ -247,15 +251,15 @@
 }
 
 .tagChipError {
-  background: rgba(255, 180, 171, 0.1);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
   color: var(--color-error);
-  border-color: rgba(255, 180, 171, 0.2);
+  border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
 .tagChipSecondary {
-  background: rgba(78, 222, 163, 0.1);
+  background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
   color: var(--color-secondary);
-  border-color: rgba(78, 222, 163, 0.2);
+  border-color: color-mix(in srgb, var(--color-secondary) 20%, transparent);
 }
 
 .insightBox {
@@ -264,15 +268,17 @@
   border-radius: var(--radius-md);
   border: 1px solid;
 }
+.insightBoxError { background: color-mix(in srgb, var(--color-error) 5%, transparent); border-color: color-mix(in srgb, var(--color-error) 10%, transparent); }
+.insightBoxSecondary { background: color-mix(in srgb, var(--color-secondary) 5%, transparent); border-color: color-mix(in srgb, var(--color-secondary) 10%, transparent); }
 
 .insightText {
   font: var(--text-body-md);
-  color: rgba(228, 225, 237, 0.8);
+  color: var(--color-on-surface-variant);
 }
 
 .tableCard {
   background: var(--color-surface-container-low);
-  border: 1px solid rgba(70, 69, 84, 0.1);
+  border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -282,7 +288,7 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid rgba(70, 69, 84, 0.1);
+  border-bottom: 1px solid var(--color-outline-variant);
 }
 
 .table {
@@ -292,7 +298,7 @@
 }
 
 .table thead {
-  background: rgba(52, 52, 61, 0.3);
+  background: var(--color-surface-container);
 }
 
 .table th {
@@ -339,11 +345,11 @@
 }
 
 .customScrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-container);
 }
 
 .customScrollbar::-webkit-scrollbar-thumb {
-  background: rgba(192, 193, 255, 0.2);
+  background: var(--color-outline-variant);
   border-radius: 10px;
 }
 
@@ -408,7 +414,7 @@
 .spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid rgba(192, 193, 255, 0.2);
+  border: 4px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -435,14 +441,14 @@
   letter-spacing: 0.01em;
   color: var(--color-primary);
   background: transparent;
-  border: 1px solid rgba(192, 193, 255, 0.2);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .downloadBtn:hover {
-  background: rgba(192, 193, 255, 0.05);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .topicBadge {
@@ -506,7 +512,7 @@
 .coverageBloom {
   font: var(--text-label-md);
   color: var(--color-primary);
-  background: rgba(192, 193, 255, 0.1);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   padding: 1px 8px;
   border-radius: var(--radius-full);
 }

@@ -99,7 +99,7 @@
 }
 
 .navLink.active {
-  background-color: rgba(192, 193, 255, 0.05); /* primary tint */
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
   color: var(--color-primary);
   border-left: 2px solid var(--color-primary);
   border-top-left-radius: 0;

@@ -75,6 +75,8 @@
   --text-label-lg: 500 14px/1.0 var(--font-family);
   --text-body-sm: 400 12px/1.5 var(--font-family);
   --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.2);
+  --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-on-primary-container: #1e1b4b;
 
   /* Spacing Rhythm */
   --sidebar-width: 240px;
@@ -103,6 +105,40 @@
   
   --transition-fast: 150ms ease;
   color-scheme: dark;
+}
+
+.light {
+  color-scheme: light;
+  --color-background: #f9f9ff;
+  --color-surface: #f9f9ff;
+  --color-surface-dim: #d9dae0;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f1f3ff;
+  --color-surface-container: #ebeeff;
+  --color-surface-container-high: #e4e8fd;
+  --color-surface-container-highest: #dee3f8;
+  --color-on-background: #191a20;
+  --color-on-surface: #191a20;
+  --color-on-surface-variant: #44464f;
+  --color-outline: #747780;
+  --color-outline-variant: #c4c6cf;
+  --color-primary: #4f46e5;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #e0e7ff;
+  --color-primary-fixed: #e0e7ff;
+  --color-primary-fixed-dim: #c7d2fe;
+  --color-secondary: #059669;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d1fae5;
+  --color-tertiary: #e11d48;
+  --color-tertiary-container: #ffe4e6;
+  --color-tertiary-fixed-dim: #fecdd3;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-shadow: rgba(0, 0, 0, 0.08);
+  --color-on-primary-container: #1e1b4b;
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 
 *, *::before, *::after {
@@ -151,7 +187,7 @@ button {
   width: 800px;
   height: 800px;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(196,181,253,0.02) 0%, rgba(17,18,22,0) 60%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-primary) 2%, transparent) 0%, transparent 60%);
   z-index: 0;
   pointer-events: none;
 }
@@ -164,7 +200,7 @@ button {
   border-radius: var(--radius-lg);
   padding: 40px var(--space-8);
   border: 1px solid var(--color-border);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 25px 50px -12px var(--color-shadow);
 }
 
 .auth-header {
@@ -302,7 +338,7 @@ button {
 
 .form-input:focus {
   border-color: var(--color-border);
-  box-shadow: 0 0 0 2px rgba(196, 181, 253, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 /* Button */

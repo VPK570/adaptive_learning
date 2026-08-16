@@ -24,6 +24,14 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            var m = window.matchMedia('(prefers-color-scheme: light)');
+            document.documentElement.classList.toggle('light', m.matches);
+          })();
+        ` }} />
+      </head>
       <body><Providers>{children}</Providers></body>
     </html>
   );

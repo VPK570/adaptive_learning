@@ -1,12 +1,13 @@
 "use client";
 
 import React from 'react';
-import { Menu, Search, Bell, History, ArrowLeft } from 'lucide-react';
+import { Menu, Search, Bell, History, ArrowLeft, Sun, Moon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import AvatarOrInitials from './AvatarOrInitials';
 import Breadcrumbs from './Breadcrumbs';
 import styles from './TopBar.module.css';
+import { useTheme } from '../context/ThemeContext';
 
 export default function TopBar({ 
   variant, 
@@ -22,6 +23,7 @@ export default function TopBar({
   const roleMatch = pathname ? pathname.match(/^\/(student|faculty|admin)/) : null;
   const role = roleMatch ? roleMatch[1] : 'student';
   const profileUrl = `/${role}/profile`;
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className={styles.topBar}>
@@ -76,6 +78,9 @@ export default function TopBar({
         <button className={styles.iconBtn} aria-label="Notifications">
           <Bell size={20} />
           <span className={styles.unreadDot}></span>
+        </button>
+        <button className={styles.iconBtn} onClick={toggleTheme} aria-label="Toggle theme">
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
         
         <div className={styles.avatarContainer}>

@@ -57,7 +57,7 @@
 }
 
 .card.checked {
-  background-color: rgba(192, 193, 255, 0.05); /* primary low opacity */
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .card.checked.primary { border-color: var(--color-primary); }

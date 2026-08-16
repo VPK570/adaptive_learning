@@ -34,7 +34,7 @@ export default function StudentDashboard() {
     id: c.course_code,
     title: c.course_name,
     description: c.description,
-    color: 'blue',
+    color: 'var(--color-primary)',
     docCount: c.doc_count || 0,
   }));
 

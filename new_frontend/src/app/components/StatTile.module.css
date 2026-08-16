@@ -45,10 +45,10 @@
   border-radius: var(--radius-full);
 }
 
-.primary .iconWrapper { background-color: rgba(192, 193, 255, 0.1); color: var(--color-primary); }
-.secondary .iconWrapper { background-color: rgba(78, 222, 163, 0.1); color: var(--color-secondary); }
-.tertiary .iconWrapper { background-color: rgba(255, 178, 183, 0.1); color: var(--color-tertiary); }
-.primary-container .iconWrapper { background-color: rgba(128, 131, 255, 0.1); color: var(--color-primary-container); }
+.primary .iconWrapper { background-color: color-mix(in srgb, var(--color-primary) 10%, transparent); color: var(--color-primary); }
+.secondary .iconWrapper { background-color: color-mix(in srgb, var(--color-secondary) 10%, transparent); color: var(--color-secondary); }
+.tertiary .iconWrapper { background-color: color-mix(in srgb, var(--color-tertiary) 10%, transparent); color: var(--color-tertiary); }
+.primary-container .iconWrapper { background-color: color-mix(in srgb, var(--color-primary-container) 10%, transparent); color: var(--color-primary-container); }
 
 .meta {
   display: flex;

@@ -82,13 +82,13 @@
 
 .courseOptionActive > div {
   border-color: var(--color-primary);
-  background: rgba(192, 193, 255, 0.05);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .courseCode {
   font: var(--text-mono-md);
   color: var(--color-primary);
-  background: rgba(192, 193, 255, 0.1);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
 }
@@ -122,7 +122,7 @@
 .bloomPillActive {
   border-color: var(--color-primary);
   color: var(--color-primary);
-  background: rgba(192, 193, 255, 0.1);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .quizInterface {
@@ -202,17 +202,17 @@
 
 .optionBtn:hover {
   border-color: var(--color-primary);
-  background: rgba(192, 193, 255, 0.05);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .optionSelected {
   border-color: var(--color-primary);
-  background: rgba(192, 193, 255, 0.05);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
 
 .optionCorrect {
   border-color: var(--color-secondary);
-  background: rgba(78, 222, 163, 0.05);
+  background: color-mix(in srgb, var(--color-secondary) 5%, transparent);
 }
 
 .feedbackArea {
@@ -251,7 +251,7 @@
   width: 96px;
   height: 96px;
   border-radius: var(--radius-full);
-  border: 4px solid rgba(78, 222, 163, 0.3);
+  border: 4px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
   position: relative;
   font: var(--text-headline-md);
   font-family: var(--font-mono);
@@ -308,7 +308,7 @@
 .badgeScore {
   font: var(--text-mono-md);
   font-size: 10px;
-  background: rgba(78, 222, 163, 0.1);
+  background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
   color: var(--color-secondary);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
@@ -317,7 +317,7 @@
 .badgeError {
   font: var(--text-mono-md);
   font-size: 10px;
-  background: rgba(255, 180, 171, 0.1);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
   color: var(--color-error);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
@@ -331,16 +331,28 @@
   color: var(--color-on-surface-variant);
 }
 
+.reviewDot {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.reviewDotCorrect { background: color-mix(in srgb, var(--color-secondary) 20%, transparent); color: var(--color-secondary); }
+.reviewDotIncorrect { background: color-mix(in srgb, var(--color-error) 20%, transparent); color: var(--color-error); }
+
 .customScrollbar::-webkit-scrollbar {
   width: 4px;
 }
 
 .customScrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-container);
 }
 
 .customScrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-outline-variant);
   border-radius: 10px;
 }
 

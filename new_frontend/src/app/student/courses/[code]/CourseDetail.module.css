@@ -106,7 +106,7 @@
 }
 
 .activeMaterial {
-  background-color: rgba(192, 193, 255, 0.05);
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
   border-color: var(--color-outline-variant);
 }
 

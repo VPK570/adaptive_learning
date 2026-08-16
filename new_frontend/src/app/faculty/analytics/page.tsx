@@ -131,7 +131,7 @@ export default function FacultyAnalyticsPage() {
 
         <div className={styles.statGrid}>
           <div className={styles.statTile}>
-            <div className={styles.statIcon} style={{ background: 'rgba(192, 193, 255, 0.1)', color: 'var(--color-primary)' }}>
+            <div className={`${styles.statIcon} ${styles.statIconPrimary}`}>
               <BarChart3 size={20} />
             </div>
             <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
@@ -146,7 +146,7 @@ export default function FacultyAnalyticsPage() {
           </div>
           {(weakTopics.length > 0 || suggestedRevision.length > 0) && (
             <div className={styles.statTile}>
-              <div className={styles.statIcon} style={{ background: 'rgba(255, 180, 171, 0.2)', color: 'var(--color-error)' }}>
+              <div className={`${styles.statIcon} ${styles.statIconError}`}>
                 <AlertTriangle size={20} />
               </div>
               <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
@@ -160,7 +160,7 @@ export default function FacultyAnalyticsPage() {
           )}
           {(suggestedRevision.length > 0 || weakTopics.length > 0) && (
             <div className={styles.statTile}>
-              <div className={styles.statIcon} style={{ background: 'rgba(78, 222, 163, 0.1)', color: 'var(--color-secondary)' }}>
+              <div className={`${styles.statIcon} ${styles.statIconSecondary}`}>
                 <Lightbulb size={20} />
               </div>
               <span style={{ font: 'var(--text-label-md)', letterSpacing: '0.01em', color: 'var(--color-on-surface-variant)', textTransform: 'uppercase' }}>
@@ -230,8 +230,8 @@ export default function FacultyAnalyticsPage() {
                   <p style={{ font: 'var(--text-body-md)', color: 'var(--color-on-surface)', marginBottom: 'var(--space-1)' }}>
                     &ldquo;{q.question}&rdquo;
                   </p>
-                  <div className={styles.questionCount} style={{ color: i === 0 ? 'rgba(192, 193, 255, 0.8)' : 'var(--color-on-surface-variant)' }}>
-                    <span style={{ color: i === 0 ? 'rgba(192, 193, 255, 0.8)' : 'var(--color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div className={`${styles.questionCount} ${i === 0 ? styles.questionCountActive : ''}`} style={{ color: i === 0 ? undefined : 'var(--color-on-surface-variant)' }}>
+                    <span style={{ color: i === 0 ? 'inherit' : 'var(--color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {i === 0 ? <Zap size={14} /> : <Clock size={14} />}
                     </span>
                     <span>Asked {q.count} times</span>
@@ -265,7 +265,7 @@ export default function FacultyAnalyticsPage() {
               )}
             </div>
             {weakTopics.length > 0 && (
-              <div className={styles.insightBox} style={{ background: 'rgba(255, 180, 171, 0.05)', borderColor: 'rgba(255, 180, 171, 0.1)' }}>
+              <div className={`${styles.insightBox} ${styles.insightBoxError}`}>
                 <p className={styles.insightText}>
                   <strong style={{ color: 'var(--color-error)' }}>Insight:</strong> Students are consistently struggling with {weakTopics.slice(0, 2).join(' and ')}. Consider reviewing these topics in the next session.
                 </p>
@@ -287,7 +287,7 @@ export default function FacultyAnalyticsPage() {
               )}
             </div>
             {suggestedRevision.length > 0 && (
-              <div className={styles.insightBox} style={{ background: 'rgba(78, 222, 163, 0.05)', borderColor: 'rgba(78, 222, 163, 0.1)' }}>
+              <div className={`${styles.insightBox} ${styles.insightBoxSecondary}`}>
                 <p className={styles.insightText}>
                   <strong style={{ color: 'var(--color-secondary)' }}>Recommendation:</strong> Focus on {suggestedRevision.slice(0, 2).join(' and ')} to address coverage gaps before assessments.
                 </p>

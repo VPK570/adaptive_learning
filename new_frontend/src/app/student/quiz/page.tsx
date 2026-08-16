@@ -377,10 +377,10 @@ export default function QuizPage() {
             {q && (
               <div className={styles.questionCard}>
                 <div className={styles.questionTags}>
-                  <span style={{ background: 'rgba(192, 193, 255, 0.1)', color: 'var(--color-primary)' }}>
+                  <span style={{ background: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', color: 'var(--color-primary)' }}>
                     BLOOM: ANALYZE
                   </span>
-                  <span style={{ background: 'rgba(78, 222, 163, 0.1)', color: 'var(--color-secondary)' }}>
+                  <span style={{ background: 'color-mix(in srgb, var(--color-secondary) 10%, transparent)', color: 'var(--color-secondary)' }}>
                     DIFFICULTY: MEDIUM
                   </span>
                 </div>
@@ -475,12 +475,7 @@ export default function QuizPage() {
               <div className={styles.reviewList}>
                 {questions.map((item, idx) => (
                   <div key={idx} style={{ padding: 'var(--space-6)', display: 'flex', gap: 'var(--space-4)' }}>
-                    <div style={{
-                      width: 24, height: 24, borderRadius: 'var(--radius-full)',
-                      background: item.is_correct ? 'rgba(78, 222, 163, 0.2)' : 'rgba(255, 180, 171, 0.2)',
-                      color: item.is_correct ? 'var(--color-secondary)' : 'var(--color-error)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
+                    <div className={`${styles.reviewDot} ${item.is_correct ? styles.reviewDotCorrect : styles.reviewDotIncorrect}`}>
                       {item.is_correct ? <Check size={14} /> : <X size={14} />}
                     </div>
                     <div>
