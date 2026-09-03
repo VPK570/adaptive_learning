@@ -296,8 +296,6 @@ dont touch/
 ├── AGENTS.md                     # Agent guide for AI coding tools
 ├── IMPLEMENTATION.md             # ← This file
 ├── README.md                     # Project README
-├── STATUS.md                     # Production readiness status
-├── TODO.md                       # Deferred features backlog
 ├── docker-compose.yml            # 5-service Docker Compose
 ├── prod.sh                       # Production deployment script
 ├── seed.spec.ts                  # Playwright test seed stub
@@ -3121,7 +3119,7 @@ Upload PDF → POST /ingest (multipart)
 - Chat session isolation (per-course scoping)
 - httpOnly cookie-based tokens (vs localStorage)
 
-**Known from `TODO.md`:**
+**Known issues:**
 - `require_role` not applied to all non-admin routes (some rely on middleware only)
 - `Depends(get_current_user)` not used on all routes
 - Quiz/flashcards frontend pages show placeholder data

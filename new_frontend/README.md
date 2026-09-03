@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend — Adaptive Learning Platform
 
-## Getting Started
+Next.js 16 App Router frontend. Proxies all API requests to the FastAPI backend via `next.config.mjs` rewrites.
 
-First, run the development server:
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+No `.env` file needed for local dev — the proxy defaults to `http://localhost:8001`.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Environment variable
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `API_PROXY_TARGET` | `http://localhost:8001` | Backend URL for API proxy |
 
-## Learn More
+Only needed if backend runs on a non-default host/port.
 
-To learn more about Next.js, take a look at the following resources:
+## Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run dev    # http://localhost:3000
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+All `/auth/*`, `/query/*`, `/chat/*`, `/courses/*`, etc. are rewritten to the backend automatically. No CORS configuration needed.
 
-## Deploy on Vercel
+## Build
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run build    # output: .next/standalone
+npm run start    # requires Node.js server.js
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Build ignores TypeScript errors (`ignoreBuildErrors: true` in `next.config.mjs`).
+
+## Lint
+
+```bash
+npm run lint     # eslint with next/core-web-vitals
+```
+
+## Key architecture notes
+
+- **Auth store**: zustand with localStorage persistence (`uniauth` key). Login sends `application/x-www-form-urlencoded`, not JSON.
+- **API client**: `src/lib/api/client.ts` — axios instance, auto-attaches Bearer token, redirects to `/` on 401.
+- **CSS**: Custom properties in `globals.css` + per-page CSS modules. No Tailwind.
+- **Next.js 16**: Has breaking changes from earlier versions. See `node_modules/next/dist/docs/` before modifying framework code.
